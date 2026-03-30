@@ -2,8 +2,10 @@
 pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 import {PayTab} from "../src/PayTab.sol";
+import {PayFee} from "../src/PayFee.sol";
 import {PayTypes} from "../src/libraries/PayTypes.sol";
 
 /// @title MockUSDCTabFuzz
@@ -44,8 +46,10 @@ contract MockUSDCTabFuzz {
 /// @notice Property-based fuzz tests for PayTab.sol — openTab
 contract PayTabFuzzTest is Test {
     PayTab internal payTab;
+    PayFee internal fee;
     MockUSDCTabFuzz internal usdc;
 
+    address internal owner = makeAddr("owner");
     address internal relayer = makeAddr("relayer");
     address internal feeWallet = makeAddr("feeWallet");
     address internal agent = makeAddr("agent");
@@ -56,7 +60,15 @@ contract PayTabFuzzTest is Test {
 
     function setUp() public {
         usdc = new MockUSDCTabFuzz();
-        payTab = new PayTab(address(usdc), feeWallet, relayer);
+
+        PayFee feeImpl = new PayFee();
+        bytes memory data = abi.encodeCall(feeImpl.initialize, (owner));
+        fee = PayFee(address(new ERC1967Proxy(address(feeImpl), data)));
+
+        payTab = new PayTab(address(usdc), address(fee), feeWallet, relayer);
+
+        vm.prank(owner);
+        fee.authorizeCaller(address(payTab));
     }
 
     // =========================================================================

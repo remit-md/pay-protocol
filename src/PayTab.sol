@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import {IPayTab} from "./interfaces/IPayTab.sol";
+import {IPayFee} from "./interfaces/IPayFee.sol";
 import {IUSDC} from "./interfaces/IUSDC.sol";
 import {PayTypes} from "./libraries/PayTypes.sol";
 import {PayErrors} from "./libraries/PayErrors.sol";
@@ -15,8 +16,8 @@ import {PayEvents} from "./libraries/PayEvents.sol";
 ///
 ///      State machine:
 ///        nonexistent → active (via openTab)
-///        active → active (via chargeTab, topUpTab — future PRs)
-///        active → closed (via closeTab — future PR)
+///        active → active (via chargeTab, topUpTab)
+///        active → closed (via closeTab)
 ///
 ///      Safety properties:
 ///        - totalCharged must never exceed locked amount
@@ -33,6 +34,9 @@ contract PayTab is IPayTab, ReentrancyGuard {
 
     /// @notice USDC token contract on Base.
     IUSDC public immutable usdc;
+
+    /// @notice Fee calculator (UUPS proxy).
+    IPayFee public immutable payFee;
 
     /// @notice Protocol fee wallet — receives activation fees and processing fees.
     address public immutable feeWallet;
@@ -53,14 +57,17 @@ contract PayTab is IPayTab, ReentrancyGuard {
 
     /// @notice Deploy PayTab.
     /// @param usdc_ USDC token address on Base
+    /// @param payFee_ PayFee calculator (proxy address)
     /// @param feeWallet_ Protocol fee wallet
     /// @param relayer_ Authorized relayer address
-    constructor(address usdc_, address feeWallet_, address relayer_) {
+    constructor(address usdc_, address payFee_, address feeWallet_, address relayer_) {
         if (usdc_ == address(0)) revert PayErrors.ZeroAddress();
+        if (payFee_ == address(0)) revert PayErrors.ZeroAddress();
         if (feeWallet_ == address(0)) revert PayErrors.ZeroAddress();
         if (relayer_ == address(0)) revert PayErrors.ZeroAddress();
 
         usdc = IUSDC(usdc_);
+        payFee = IPayFee(payFee_);
         feeWallet = feeWallet_;
         relayer = relayer_;
     }
@@ -116,6 +123,65 @@ contract PayTab is IPayTab, ReentrancyGuard {
         t.chargeCount += 1;
 
         emit PayEvents.TabCharged(tabId, amount, t.amount, t.chargeCount);
+    }
+
+    // =========================================================================
+    // IPayTab — closeTab
+    // =========================================================================
+
+    /// @inheritdoc IPayTab
+    /// @dev CEI: checks → effects (status + volume) → interactions (USDC transfers).
+    ///      Distribution: provider gets totalCharged - fee, fee wallet gets fee, agent gets remaining.
+    ///      If totalCharged == 0, no fee, full balance refunded to agent.
+    function closeTab(bytes32 tabId) external nonReentrant {
+        PayTypes.Tab storage t = _tabs[tabId];
+
+        // --- Checks ---
+        if (t.agent == address(0)) revert PayErrors.TabNotFound(tabId);
+        if (t.status != PayTypes.TabStatus.Active) revert PayErrors.TabClosed(tabId);
+        if (msg.sender != t.agent && msg.sender != t.provider && msg.sender != relayer) {
+            revert PayErrors.Unauthorized(msg.sender);
+        }
+
+        // Snapshot values before modifying storage
+        address agent = t.agent;
+        address provider = t.provider;
+        uint96 totalCharged = t.totalCharged;
+        uint96 remaining = t.amount;
+
+        // Calculate fee on totalCharged (not on remaining balance)
+        uint96 fee = 0;
+        uint96 providerPayout = 0;
+        if (totalCharged > 0) {
+            uint96 rateBps = payFee.getFeeRate(provider);
+            fee = uint96((uint256(totalCharged) * rateBps) / 10_000);
+            providerPayout = totalCharged - fee;
+        }
+
+        // --- Effects ---
+        t.status = PayTypes.TabStatus.Closed;
+        t.amount = 0;
+
+        // Record volume for provider (even if fee is dust/zero)
+        if (totalCharged > 0) {
+            payFee.recordTransaction(provider, totalCharged);
+        }
+
+        // --- Interactions ---
+        if (providerPayout > 0) {
+            bool sent = usdc.transfer(provider, providerPayout);
+            if (!sent) revert PayErrors.TransferFailed();
+        }
+        if (fee > 0) {
+            bool sent = usdc.transfer(feeWallet, fee);
+            if (!sent) revert PayErrors.TransferFailed();
+        }
+        if (remaining > 0) {
+            bool sent = usdc.transfer(agent, remaining);
+            if (!sent) revert PayErrors.TransferFailed();
+        }
+
+        emit PayEvents.TabClosed(tabId, totalCharged, providerPayout, fee, remaining);
     }
 
     // =========================================================================
