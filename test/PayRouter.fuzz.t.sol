@@ -74,8 +74,7 @@ contract PayRouterFuzzTest is Test {
         fee = PayFee(address(new ERC1967Proxy(address(feeImpl), feeData)));
 
         PayRouter routerImpl = new PayRouter();
-        bytes memory routerData =
-            abi.encodeCall(routerImpl.initialize, (owner, address(usdc), address(fee), feeWallet));
+        bytes memory routerData = abi.encodeCall(routerImpl.initialize, (owner, address(usdc), address(fee), feeWallet));
         router = PayRouter(address(new ERC1967Proxy(address(routerImpl), routerData)));
 
         vm.prank(owner);
@@ -184,18 +183,12 @@ contract PayRouterFuzzTest is Test {
         usdc.mint(agent, uint256(amount1) + uint256(amount2));
 
         vm.startPrank(relayer);
-        router.settleX402(
-            agent, provider, amount1, 0, type(uint256).max, bytes32("fv1"), 0, bytes32(0), bytes32(0)
-        );
-        router.settleX402(
-            agent, provider, amount2, 0, type(uint256).max, bytes32("fv2"), 0, bytes32(0), bytes32(0)
-        );
+        router.settleX402(agent, provider, amount1, 0, type(uint256).max, bytes32("fv1"), 0, bytes32(0), bytes32(0));
+        router.settleX402(agent, provider, amount2, 0, type(uint256).max, bytes32("fv2"), 0, bytes32(0), bytes32(0));
         vm.stopPrank();
 
         assertEq(
-            fee.getMonthlyVolume(provider),
-            uint256(amount1) + uint256(amount2),
-            "volume must equal sum of settlements"
+            fee.getMonthlyVolume(provider), uint256(amount1) + uint256(amount2), "volume must equal sum of settlements"
         );
     }
 }

@@ -96,8 +96,7 @@ contract PayRouterTest is Test {
 
         // Deploy PayRouter behind UUPS proxy
         PayRouter routerImpl = new PayRouter();
-        bytes memory routerData =
-            abi.encodeCall(routerImpl.initialize, (owner, address(usdc), address(fee), feeWallet));
+        bytes memory routerData = abi.encodeCall(routerImpl.initialize, (owner, address(usdc), address(fee), feeWallet));
         router = PayRouter(address(new ERC1967Proxy(address(routerImpl), routerData)));
 
         // Authorize PayRouter to record transactions on PayFee
@@ -134,7 +133,9 @@ contract PayRouterTest is Test {
     function test_initialize_revertsOnZeroOwner() public {
         PayRouter impl = new PayRouter();
         vm.expectRevert(abi.encodeWithSelector(PayErrors.ZeroAddress.selector));
-        new ERC1967Proxy(address(impl), abi.encodeCall(impl.initialize, (address(0), address(usdc), address(fee), feeWallet)));
+        new ERC1967Proxy(
+            address(impl), abi.encodeCall(impl.initialize, (address(0), address(usdc), address(fee), feeWallet))
+        );
     }
 
     function test_initialize_revertsOnZeroUsdc() public {
@@ -152,7 +153,9 @@ contract PayRouterTest is Test {
     function test_initialize_revertsOnZeroFeeWallet() public {
         PayRouter impl = new PayRouter();
         vm.expectRevert(abi.encodeWithSelector(PayErrors.ZeroAddress.selector));
-        new ERC1967Proxy(address(impl), abi.encodeCall(impl.initialize, (owner, address(usdc), address(fee), address(0))));
+        new ERC1967Proxy(
+            address(impl), abi.encodeCall(impl.initialize, (owner, address(usdc), address(fee), address(0)))
+        );
     }
 
     // =========================================================================
@@ -298,9 +301,7 @@ contract PayRouterTest is Test {
     function test_settleX402_preferredRate_afterThreshold() public {
         // Push provider past $50k volume
         vm.prank(relayer);
-        router.settleX402(
-            agent, provider, 50_000e6, 0, type(uint256).max, bytes32("push"), 0, bytes32(0), bytes32(0)
-        );
+        router.settleX402(agent, provider, 50_000e6, 0, type(uint256).max, bytes32("push"), 0, bytes32(0), bytes32(0));
 
         // Next settlement should use preferred rate
         uint96 amount = 1_000e6;
@@ -309,9 +310,7 @@ contract PayRouterTest is Test {
         uint256 providerBefore = usdc.balanceOf(provider);
 
         vm.prank(relayer);
-        router.settleX402(
-            agent, provider, amount, 0, type(uint256).max, bytes32("pref"), 0, bytes32(0), bytes32(0)
-        );
+        router.settleX402(agent, provider, amount, 0, type(uint256).max, bytes32("pref"), 0, bytes32(0), bytes32(0));
 
         assertEq(usdc.balanceOf(provider) - providerBefore, amount - expectedFee);
     }
@@ -329,9 +328,7 @@ contract PayRouterTest is Test {
     function test_settleX402_revertsOnZeroFrom() public {
         vm.expectRevert(abi.encodeWithSelector(PayErrors.ZeroAddress.selector));
         vm.prank(relayer);
-        router.settleX402(
-            address(0), provider, 5e6, 0, type(uint256).max, bytes32("x"), 0, bytes32(0), bytes32(0)
-        );
+        router.settleX402(address(0), provider, 5e6, 0, type(uint256).max, bytes32("x"), 0, bytes32(0), bytes32(0));
     }
 
     function test_settleX402_revertsOnZeroTo() public {
@@ -349,9 +346,7 @@ contract PayRouterTest is Test {
     function test_settleX402_revertsOnBelowMinimum() public {
         vm.expectRevert(abi.encodeWithSelector(PayErrors.BelowMinimum.selector, uint96(999_999), MIN));
         vm.prank(relayer);
-        router.settleX402(
-            agent, provider, 999_999, 0, type(uint256).max, bytes32("x"), 0, bytes32(0), bytes32(0)
-        );
+        router.settleX402(agent, provider, 999_999, 0, type(uint256).max, bytes32("x"), 0, bytes32(0), bytes32(0));
     }
 
     function test_settleX402_revertsOnZeroAmount() public {
@@ -434,9 +429,7 @@ contract PayRouterTest is Test {
         uint96 amount = 77_777_777; // ~$77.78 — non-round number
 
         vm.prank(relayer);
-        router.settleX402(
-            agent, provider, amount, 0, type(uint256).max, bytes32("acc"), 0, bytes32(0), bytes32(0)
-        );
+        router.settleX402(agent, provider, amount, 0, type(uint256).max, bytes32("acc"), 0, bytes32(0), bytes32(0));
 
         uint256 providerGot = usdc.balanceOf(provider);
         uint256 feeGot = usdc.balanceOf(feeWallet);
