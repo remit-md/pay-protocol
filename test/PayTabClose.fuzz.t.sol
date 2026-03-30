@@ -124,7 +124,7 @@ contract PayTabCloseFuzzTest is Test {
             assertEq(providerGot + feeGot + agentGot, balance, "distribution must sum to tab balance");
         } else {
             // No charge → full refund
-            assertEq(agentGot, balance, "no charges → full refund");
+            assertEq(agentGot, balance, "no charges - full refund");
             assertEq(providerGot, 0);
             assertEq(feeGot, 0);
         }
