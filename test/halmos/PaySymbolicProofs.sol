@@ -188,8 +188,7 @@ contract PaySymbolicProofs is Test {
 
         // Expected fee: max(MIN_ACTIVATION_FEE, amount / 100)
         uint96 percentFee = amount / 100;
-        uint96 expectedFee =
-            percentFee > PayTypes.MIN_ACTIVATION_FEE ? percentFee : PayTypes.MIN_ACTIVATION_FEE;
+        uint96 expectedFee = percentFee > PayTypes.MIN_ACTIVATION_FEE ? percentFee : PayTypes.MIN_ACTIVATION_FEE;
 
         // INV: activation fee matches formula
         assert(t.activationFee == expectedFee);
