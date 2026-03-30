@@ -338,6 +338,7 @@ contract PayTabTest is Test {
         assertEq(t.maxChargePerCall, maxCharge);
         assertEq(t.activationFee, expectedFee);
         assertEq(uint8(t.status), uint8(PayTypes.TabStatus.Active));
+        assertEq(t.chargeCount, 0);
     }
 
     // =========================================================================

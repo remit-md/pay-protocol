@@ -94,6 +94,31 @@ contract PayTab is IPayTab, ReentrancyGuard {
     }
 
     // =========================================================================
+    // IPayTab — chargeTab
+    // =========================================================================
+
+    /// @inheritdoc IPayTab
+    /// @dev Only relayer. No USDC transfer — just SSTORE (~$0.000004 gas).
+    ///      CEI: checks → effects → no interactions.
+    function chargeTab(bytes32 tabId, uint96 amount) external onlyRelayer {
+        PayTypes.Tab storage t = _tabs[tabId];
+
+        // --- Checks ---
+        if (t.agent == address(0)) revert PayErrors.TabNotFound(tabId);
+        if (t.status != PayTypes.TabStatus.Active) revert PayErrors.TabClosed(tabId);
+        if (amount == 0) revert PayErrors.ZeroAmount();
+        if (amount > t.maxChargePerCall) revert PayErrors.ChargeLimitExceeded(tabId, amount, t.maxChargePerCall);
+        if (amount > t.amount) revert PayErrors.InsufficientBalance(tabId, amount, t.amount);
+
+        // --- Effects ---
+        t.amount -= amount;
+        t.totalCharged += amount;
+        t.chargeCount += 1;
+
+        emit PayEvents.TabCharged(tabId, amount, t.amount, t.chargeCount);
+    }
+
+    // =========================================================================
     // IPayTab — getTab
     // =========================================================================
 
@@ -128,7 +153,8 @@ contract PayTab is IPayTab, ReentrancyGuard {
             totalCharged: 0,
             maxChargePerCall: maxChargePerCall,
             activationFee: activationFee,
-            status: PayTypes.TabStatus.Active
+            status: PayTypes.TabStatus.Active,
+            chargeCount: 0
         });
 
         // --- Interactions ---

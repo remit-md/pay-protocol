@@ -212,5 +212,6 @@ contract PayTabFuzzTest is Test {
         assertEq(t1.maxChargePerCall, t2.maxChargePerCall);
         assertEq(t1.activationFee, t2.activationFee);
         assertEq(uint8(t1.status), uint8(t2.status));
+        assertEq(t1.chargeCount, t2.chargeCount);
     }
 }
