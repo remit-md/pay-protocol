@@ -11,7 +11,10 @@ library PayTypes {
     }
 
     /// @notice Tab struct (packed for gas efficiency)
-    /// @dev address (20 bytes) + uint96 (12 bytes) = 32 bytes = 1 slot
+    /// @dev Slot 0: agent (20) + amount (12) = 32
+    ///      Slot 1: provider (20) + totalCharged (12) = 32
+    ///      Slot 2: maxChargePerCall (12) + activationFee (12) + status (1) = 25
+    ///      Slot 3: chargeCount (32)
     struct Tab {
         address agent;
         uint96 amount; // current remaining balance
@@ -20,6 +23,7 @@ library PayTypes {
         uint96 maxChargePerCall; // agent-set per-charge limit
         uint96 activationFee; // fee paid at open
         TabStatus status;
+        uint256 chargeCount; // number of charges applied
     }
 
     /// @notice Fee tiers — cliff model (not marginal)
