@@ -1,0 +1,60 @@
+name: Deploy Testnet
+
+concurrency:
+  group: deploy-testnet
+  cancel-in-progress: false
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: "Forge script to run"
+        required: true
+        type: choice
+        options:
+          - DeployTestnet.s.sol
+      dry_run:
+        description: "Simulate only (no broadcast)"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: testnet
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
+        with:
+          version: nightly-c07d504b4ae67754584f4e05ff0c547a43c50f7b
+
+      - name: Build
+        run: forge build
+
+      - name: Run testnet deploy script
+        env:
+          FOUNDRY_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+          ALCHEMY_BASE_SEPOLIA_URL: ${{ secrets.ALCHEMY_BASE_SEPOLIA_URL }}
+        run: |
+          FLAGS="--rpc-url $ALCHEMY_BASE_SEPOLIA_URL -vvvv"
+          if [ "${{ inputs.dry_run }}" = "false" ]; then
+            FLAGS="$FLAGS --broadcast --slow --verify --verifier blockscout --verifier-url https://base-sepolia.blockscout.com/api"
+          fi
+          forge script script/${{ inputs.script }} --private-key "$FOUNDRY_PRIVATE_KEY" $FLAGS
+
+      - name: Upload broadcast artifacts
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        if: always()
+        with:
+          name: broadcast-testnet-${{ github.run_number }}
+          path: broadcast/**/*.json
+          retention-days: 90
