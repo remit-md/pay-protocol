@@ -20,6 +20,9 @@ library PayErrors {
     error InsufficientBalance(bytes32 tabId, uint96 amount, uint96 balance);
     error SelfPayment(address wallet);
 
+    // Transfer
+    error TransferFailed();
+
     // Fee
     error ZeroFee(uint96 amount);
 }
