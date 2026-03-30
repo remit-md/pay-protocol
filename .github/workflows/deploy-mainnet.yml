@@ -1,0 +1,55 @@
+name: Deploy Mainnet
+
+concurrency:
+  group: deploy-mainnet
+  cancel-in-progress: false
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Simulate only (no broadcast)"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
+        with:
+          version: nightly-c07d504b4ae67754584f4e05ff0c547a43c50f7b
+
+      - name: Build
+        run: forge build
+
+      - name: Run mainnet deploy script
+        env:
+          FOUNDRY_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+          BASE_MAINNET_RPC_URL: ${{ secrets.BASE_MAINNET_RPC_URL }}
+          BASESCAN_API_KEY: ${{ secrets.BASESCAN_API_KEY }}
+        run: |
+          FLAGS="--rpc-url $BASE_MAINNET_RPC_URL -vvvv"
+          if [ "${{ inputs.dry_run }}" = "false" ]; then
+            FLAGS="$FLAGS --broadcast --slow --verify --etherscan-api-key $BASESCAN_API_KEY"
+          fi
+          forge script script/DeployMainnet.s.sol --private-key "$FOUNDRY_PRIVATE_KEY" $FLAGS
+
+      - name: Upload broadcast artifacts
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        if: always()
+        with:
+          name: broadcast-mainnet-${{ github.run_number }}
+          path: broadcast/**/*.json
+          retention-days: 90
