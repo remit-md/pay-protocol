@@ -2,8 +2,10 @@
 pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 import {PayTab} from "../src/PayTab.sol";
+import {PayFee} from "../src/PayFee.sol";
 import {PayTypes} from "../src/libraries/PayTypes.sol";
 import {PayErrors} from "../src/libraries/PayErrors.sol";
 import {PayEvents} from "../src/libraries/PayEvents.sol";
@@ -46,8 +48,10 @@ contract MockUSDCTab {
 /// @notice Unit tests for PayTab.sol — openTab + openTabFor + getTab
 contract PayTabTest is Test {
     PayTab internal tab;
+    PayFee internal fee;
     MockUSDCTab internal usdc;
 
+    address internal owner = makeAddr("owner");
     address internal relayer = makeAddr("relayer");
     address internal feeWallet = makeAddr("feeWallet");
     address internal agent = makeAddr("agent");
@@ -61,7 +65,17 @@ contract PayTabTest is Test {
 
     function setUp() public {
         usdc = new MockUSDCTab();
-        tab = new PayTab(address(usdc), feeWallet, relayer);
+
+        // Deploy PayFee behind UUPS proxy
+        PayFee feeImpl = new PayFee();
+        bytes memory data = abi.encodeCall(feeImpl.initialize, (owner));
+        fee = PayFee(address(new ERC1967Proxy(address(feeImpl), data)));
+
+        tab = new PayTab(address(usdc), address(fee), feeWallet, relayer);
+
+        // Authorize PayTab on PayFee
+        vm.prank(owner);
+        fee.authorizeCaller(address(tab));
 
         // Fund agent and approve PayTab
         usdc.mint(agent, 1_000_000e6);
@@ -81,17 +95,22 @@ contract PayTabTest is Test {
 
     function test_constructor_revertsOnZeroUsdc() public {
         vm.expectRevert(abi.encodeWithSelector(PayErrors.ZeroAddress.selector));
-        new PayTab(address(0), feeWallet, relayer);
+        new PayTab(address(0), address(fee), feeWallet, relayer);
+    }
+
+    function test_constructor_revertsOnZeroPayFee() public {
+        vm.expectRevert(abi.encodeWithSelector(PayErrors.ZeroAddress.selector));
+        new PayTab(address(usdc), address(0), feeWallet, relayer);
     }
 
     function test_constructor_revertsOnZeroFeeWallet() public {
         vm.expectRevert(abi.encodeWithSelector(PayErrors.ZeroAddress.selector));
-        new PayTab(address(usdc), address(0), relayer);
+        new PayTab(address(usdc), address(fee), address(0), relayer);
     }
 
     function test_constructor_revertsOnZeroRelayer() public {
         vm.expectRevert(abi.encodeWithSelector(PayErrors.ZeroAddress.selector));
-        new PayTab(address(usdc), feeWallet, address(0));
+        new PayTab(address(usdc), address(fee), feeWallet, address(0));
     }
 
     // =========================================================================

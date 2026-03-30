@@ -7,8 +7,8 @@ import {PayTypes} from "../libraries/PayTypes.sol";
 /// @notice Pre-funded metered account. Agent locks USDC, provider charges per use.
 /// @dev IMMUTABLE — no proxy, no admin key, no upgrade path. Holds funds.
 ///
-///      This interface is extended incrementally. Current: openTab, openTabFor, chargeTab, getTab.
-///      Future PRs: closeTab, topUpTab.
+///      This interface is extended incrementally. Current: openTab, openTabFor, chargeTab, closeTab, getTab.
+///      Future PRs: topUpTab.
 interface IPayTab {
     /// @notice Open a tab. Caller is the agent. Locks USDC and deducts activation fee.
     /// @param tabId Unique tab identifier (caller-generated, e.g. keccak256 of nonce).
@@ -31,6 +31,11 @@ interface IPayTab {
     /// @param amount Charge amount (USDC, 6 decimals). Must be <= maxChargePerCall and <= remaining balance.
     /// @dev Only callable by the authorized relayer (server pre-validates, then submits on-chain).
     function chargeTab(bytes32 tabId, uint96 amount) external;
+
+    /// @notice Close a tab. Distributes funds: provider gets totalCharged minus fee, fee wallet gets fee, agent gets remaining balance.
+    /// @param tabId The tab to close.
+    /// @dev Callable by agent, provider, or relayer. Unilateral — neither party can block the other.
+    function closeTab(bytes32 tabId) external;
 
     /// @notice Get tab details.
     /// @param tabId The tab identifier.
