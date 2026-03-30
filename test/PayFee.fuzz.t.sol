@@ -123,8 +123,7 @@ contract PayFeeFuzzTest is Test {
         }
 
         uint96 f = fee.calculateFee(p, amount);
-        uint96 rate =
-            volume >= PayTypes.FEE_THRESHOLD ? PayTypes.FEE_RATE_PREFERRED_BPS : PayTypes.FEE_RATE_BPS;
+        uint96 rate = volume >= PayTypes.FEE_THRESHOLD ? PayTypes.FEE_RATE_PREFERRED_BPS : PayTypes.FEE_RATE_BPS;
 
         assertEq(f, uint96((uint256(amount) * rate) / 10_000));
     }

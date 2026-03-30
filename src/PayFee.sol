@@ -112,9 +112,10 @@ contract PayFee is IPayFee, UUPSUpgradeable {
 
     /// @inheritdoc IPayFee
     function getFeeRate(address provider) external view override returns (uint96 rateBps) {
-        return _getCurrentVolume(provider) >= PayTypes.FEE_THRESHOLD
-            ? PayTypes.FEE_RATE_PREFERRED_BPS
-            : PayTypes.FEE_RATE_BPS;
+        return
+            _getCurrentVolume(provider) >= PayTypes.FEE_THRESHOLD
+                ? PayTypes.FEE_RATE_PREFERRED_BPS
+                : PayTypes.FEE_RATE_BPS;
     }
 
     // =========================================================================
