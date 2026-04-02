@@ -1,0 +1,46 @@
+name: Compile Artifacts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
+        with:
+          version: nightly-c07d504b4ae67754584f4e05ff0c547a43c50f7b
+
+      - name: Build
+        run: forge build
+
+      - name: Extract deploy artifacts
+        run: |
+          mkdir -p artifacts
+          for contract in PayFee PayDirect PayTab PayRouter; do
+            jq '{abi: .abi, bytecode: .bytecode.object}' "out/${contract}.sol/${contract}.json" > "artifacts/${contract}.json"
+          done
+          # ERC1967Proxy from OpenZeppelin
+          jq '{abi: .abi, bytecode: .bytecode.object}' "out/ERC1967Proxy.sol/ERC1967Proxy.json" > "artifacts/ERC1967Proxy.json"
+          # Bundle all into one file for the deploy page
+          jq -s '{PayFee: .[0], PayDirect: .[1], PayTab: .[2], PayRouter: .[3], ERC1967Proxy: .[4]}' \
+            artifacts/PayFee.json artifacts/PayDirect.json artifacts/PayTab.json artifacts/PayRouter.json artifacts/ERC1967Proxy.json \
+            > artifacts/deploy-bundle.json
+          echo "=== Artifact sizes ==="
+          ls -la artifacts/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: deploy-artifacts
+          path: artifacts/
+          retention-days: 30

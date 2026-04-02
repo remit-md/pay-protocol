@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pay Protocol — Mainnet Deploy</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'SF Mono', 'Fira Code', monospace; background: #0a0a0a; color: #e0e0e0; padding: 2rem; max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin-bottom: 0.5rem; color: #fff; }
+  h2 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; color: #8b8b8b; }
+  .subtitle { color: #666; margin-bottom: 2rem; }
+  .section { background: #111; border: 1px solid #222; border-radius: 8px; padding: 1.2rem; margin-bottom: 1rem; }
+  label { display: block; font-size: 0.85rem; color: #888; margin-bottom: 0.3rem; }
+  input, textarea { width: 100%; padding: 0.5rem; background: #1a1a1a; border: 1px solid #333; border-radius: 4px; color: #fff; font-family: inherit; font-size: 0.85rem; }
+  input:focus, textarea:focus { outline: none; border-color: #555; }
+  textarea { min-height: 80px; resize: vertical; }
+  button { padding: 0.6rem 1.2rem; border: none; border-radius: 4px; font-family: inherit; font-size: 0.85rem; cursor: pointer; margin-right: 0.5rem; margin-top: 0.5rem; }
+  .btn-primary { background: #2563eb; color: #fff; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-primary:disabled { background: #333; color: #666; cursor: not-allowed; }
+  .btn-danger { background: #dc2626; color: #fff; }
+  .btn-success { background: #16a34a; color: #fff; }
+  .btn-secondary { background: #333; color: #ccc; }
+  .step { display: flex; align-items: center; padding: 0.4rem 0; border-bottom: 1px solid #1a1a1a; }
+  .step-num { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold; margin-right: 0.8rem; flex-shrink: 0; }
+  .step-pending .step-num { background: #222; color: #666; }
+  .step-active .step-num { background: #2563eb; color: #fff; }
+  .step-done .step-num { background: #16a34a; color: #fff; }
+  .step-error .step-num { background: #dc2626; color: #fff; }
+  .step-label { flex: 1; font-size: 0.85rem; }
+  .step-addr { font-size: 0.75rem; color: #16a34a; margin-left: 0.5rem; word-break: break-all; }
+  .step-err { font-size: 0.75rem; color: #dc2626; margin-left: 0.5rem; word-break: break-all; }
+  #log { background: #0a0a0a; border: 1px solid #222; border-radius: 4px; padding: 0.8rem; max-height: 300px; overflow-y: auto; font-size: 0.8rem; line-height: 1.6; margin-top: 1rem; white-space: pre-wrap; }
+  .log-info { color: #8b8b8b; }
+  .log-ok { color: #16a34a; }
+  .log-err { color: #dc2626; }
+  .log-warn { color: #eab308; }
+  .row { display: flex; gap: 1rem; }
+  .row > div { flex: 1; }
+  .summary { background: #0d1117; border: 1px solid #1a3a1a; border-radius: 8px; padding: 1.2rem; margin-top: 1rem; }
+  .summary h3 { color: #16a34a; margin-bottom: 0.8rem; }
+  .summary pre { font-size: 0.8rem; line-height: 1.8; color: #ccc; white-space: pre-wrap; word-break: break-all; }
+  .hidden { display: none; }
+  .warning { background: #1a1a00; border: 1px solid #332; border-radius: 4px; padding: 0.8rem; margin-bottom: 1rem; font-size: 0.85rem; color: #eab308; }
+</style>
+</head>
+<body>
+
+<h1>Pay Protocol — Base Mainnet Deploy</h1>
+<p class="subtitle">Deploy all 4 contracts via MetaMask. Chain: Base (8453). Token: USDC.</p>
+
+<div class="warning">
+  This page deploys real contracts on Base mainnet. Double-check all addresses before proceeding. Each step is a separate MetaMask transaction.
+</div>
+
+<!-- Step 1: Load Artifacts -->
+<div class="section">
+  <h2>1. Load Compiled Artifacts</h2>
+  <p style="font-size: 0.8rem; color: #666; margin-bottom: 0.5rem;">
+    Paste the contents of <code>deploy-bundle.json</code> from the CI compile-artifacts workflow.
+  </p>
+  <textarea id="artifactsInput" placeholder='Paste deploy-bundle.json contents here...'></textarea>
+  <button class="btn-primary" onclick="loadArtifacts()">Load Artifacts</button>
+  <span id="artifactStatus" style="font-size: 0.8rem; margin-left: 0.5rem;"></span>
+</div>
+
+<!-- Step 2: Configuration -->
+<div class="section">
+  <h2>2. Configuration</h2>
+  <div class="row">
+    <div>
+      <label>Fee Wallet (same as Remit)</label>
+      <input id="feeWallet" value="0xc848c2adbc9e47f9788505cc1b405ef02045f281" />
+    </div>
+    <div>
+      <label>Safe / Admin (same as Remit)</label>
+      <input id="safeAddress" value="0x7cb5d64a56b6e554dba8e4ff8f4072c04de01735" />
+    </div>
+  </div>
+  <div class="row" style="margin-top: 0.8rem;">
+    <div>
+      <label>Relayer (server signing key address)</label>
+      <input id="relayerAddress" value="0x99DeC2AC27b6B54281ec82a8eBBc2513D91a8c3B" placeholder="Server relayer address" />
+    </div>
+    <div>
+      <label>USDC (Base mainnet — do not change)</label>
+      <input id="usdcAddress" value="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" readonly style="color: #666;" />
+    </div>
+  </div>
+</div>
+
+<!-- Step 3: Connect + Deploy -->
+<div class="section">
+  <h2>3. Connect & Deploy</h2>
+  <div style="margin-bottom: 0.8rem;">
+    <button class="btn-primary" id="connectBtn" onclick="connectWallet()">Connect MetaMask</button>
+    <span id="walletStatus" style="font-size: 0.8rem; margin-left: 0.5rem;"></span>
+  </div>
+  <button class="btn-danger" id="deployBtn" onclick="deploy()" disabled>Deploy All Contracts</button>
+  <span style="font-size: 0.75rem; color: #666; margin-left: 0.5rem;">~12 MetaMask confirmations total</span>
+</div>
+
+<!-- Progress -->
+<div class="section">
+  <h2>Progress</h2>
+  <div id="steps">
+    <div class="step step-pending" id="step-0"><span class="step-num">1</span><span class="step-label">Deploy PayFee implementation</span></div>
+    <div class="step step-pending" id="step-1"><span class="step-num">2</span><span class="step-label">Deploy PayFee proxy (ERC1967)</span></div>
+    <div class="step step-pending" id="step-2"><span class="step-num">3</span><span class="step-label">Deploy PayDirect (immutable)</span></div>
+    <div class="step step-pending" id="step-3"><span class="step-num">4</span><span class="step-label">Deploy PayTab (immutable)</span></div>
+    <div class="step step-pending" id="step-4"><span class="step-num">5</span><span class="step-label">Deploy PayRouter implementation</span></div>
+    <div class="step step-pending" id="step-5"><span class="step-num">6</span><span class="step-label">Deploy PayRouter proxy (ERC1967)</span></div>
+    <div class="step step-pending" id="step-6"><span class="step-num">7</span><span class="step-label">PayFee: authorize PayDirect</span></div>
+    <div class="step step-pending" id="step-7"><span class="step-num">8</span><span class="step-label">PayFee: authorize PayTab</span></div>
+    <div class="step step-pending" id="step-8"><span class="step-num">9</span><span class="step-label">PayFee: authorize PayRouter</span></div>
+    <div class="step step-pending" id="step-9"><span class="step-num">10</span><span class="step-label">PayRouter: authorize relayer</span></div>
+    <div class="step step-pending" id="step-10"><span class="step-num">11</span><span class="step-label">PayFee: transfer ownership to Safe</span></div>
+    <div class="step step-pending" id="step-11"><span class="step-num">12</span><span class="step-label">PayRouter: transfer ownership to Safe</span></div>
+  </div>
+  <div id="log"></div>
+</div>
+
+<!-- Summary (shown after completion) -->
+<div class="summary hidden" id="summary">
+  <h3>Deployment Complete</h3>
+  <pre id="summaryText"></pre>
+</div>
+
+<script>
+const BASE_CHAIN_ID = 8453;
+let artifacts = null;
+let signer = null;
+let deployerAddress = null;
+
+// Deployed addresses (filled during deploy)
+const deployed = {
+  payFeeImpl: null,
+  payFeeProxy: null,
+  payDirect: null,
+  payTab: null,
+  payRouterImpl: null,
+  payRouterProxy: null,
+};
+
+function log(msg, cls = 'log-info') {
+  const el = document.getElementById('log');
+  const line = document.createElement('div');
+  line.className = cls;
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function setStep(idx, state, extra = '') {
+  const el = document.getElementById(`step-${idx}`);
+  el.className = `step step-${state}`;
+  // Remove old extras
+  el.querySelectorAll('.step-addr, .step-err').forEach(e => e.remove());
+  if (extra && state === 'done') {
+    const span = document.createElement('span');
+    span.className = 'step-addr';
+    span.textContent = extra;
+    el.appendChild(span);
+  } else if (extra && state === 'error') {
+    const span = document.createElement('span');
+    span.className = 'step-err';
+    span.textContent = extra;
+    el.appendChild(span);
+  }
+}
+
+function loadArtifacts() {
+  try {
+    const raw = document.getElementById('artifactsInput').value.trim();
+    const parsed = JSON.parse(raw);
+    const required = ['PayFee', 'PayDirect', 'PayTab', 'PayRouter', 'ERC1967Proxy'];
+    for (const name of required) {
+      if (!parsed[name]?.abi || !parsed[name]?.bytecode) {
+        throw new Error(`Missing ABI or bytecode for ${name}`);
+      }
+    }
+    artifacts = parsed;
+    document.getElementById('artifactStatus').textContent = 'Loaded (5 contracts)';
+    document.getElementById('artifactStatus').style.color = '#16a34a';
+    log('Artifacts loaded: PayFee, PayDirect, PayTab, PayRouter, ERC1967Proxy', 'log-ok');
+    checkReady();
+  } catch (e) {
+    document.getElementById('artifactStatus').textContent = `Error: ${e.message}`;
+    document.getElementById('artifactStatus').style.color = '#dc2626';
+    log(`Artifact load failed: ${e.message}`, 'log-err');
+  }
+}
+
+async function connectWallet() {
+  try {
+    if (!window.ethereum) {
+      alert('MetaMask not found. Install MetaMask and reload.');
+      return;
+    }
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const network = await provider.getNetwork();
+    if (Number(network.chainId) !== BASE_CHAIN_ID) {
+      log(`Wrong network: chainId=${network.chainId}. Switching to Base (8453)...`, 'log-warn');
+      try {
+        await window.ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0x2105' }],
+        });
+      } catch (switchErr) {
+        if (switchErr.code === 4902) {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: '0x2105',
+              chainName: 'Base',
+              nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+              rpcUrls: ['https://mainnet.base.org'],
+              blockExplorerUrls: ['https://basescan.org'],
+            }],
+          });
+        } else {
+          throw switchErr;
+        }
+      }
+    }
+    // Re-create provider after potential chain switch
+    const p2 = new ethers.BrowserProvider(window.ethereum);
+    signer = await p2.getSigner();
+    deployerAddress = await signer.getAddress();
+    const balance = await p2.getBalance(deployerAddress);
+    const ethBal = ethers.formatEther(balance);
+
+    document.getElementById('walletStatus').textContent = `${deployerAddress.slice(0, 6)}...${deployerAddress.slice(-4)} (${parseFloat(ethBal).toFixed(4)} ETH)`;
+    document.getElementById('walletStatus').style.color = '#16a34a';
+    log(`Connected: ${deployerAddress} — ${ethBal} ETH on Base`, 'log-ok');
+
+    if (parseFloat(ethBal) < 0.01) {
+      log('WARNING: Low ETH balance. Need ~0.02-0.05 ETH for gas.', 'log-warn');
+    }
+    checkReady();
+  } catch (e) {
+    log(`Wallet connection failed: ${e.message}`, 'log-err');
+    document.getElementById('walletStatus').textContent = `Error: ${e.message}`;
+    document.getElementById('walletStatus').style.color = '#dc2626';
+  }
+}
+
+function checkReady() {
+  const ready = artifacts && signer;
+  document.getElementById('deployBtn').disabled = !ready;
+}
+
+async function deployContract(name, abi, bytecode, args = []) {
+  log(`Deploying ${name}...`);
+  const factory = new ethers.ContractFactory(abi, bytecode, signer);
+  const contract = await factory.deploy(...args);
+  log(`${name} tx: ${contract.deploymentTransaction().hash}`);
+  await contract.waitForDeployment();
+  const addr = await contract.getAddress();
+  log(`${name} deployed: ${addr}`, 'log-ok');
+  return addr;
+}
+
+async function deploy() {
+  const feeWallet = document.getElementById('feeWallet').value.trim();
+  const safeAddress = document.getElementById('safeAddress').value.trim();
+  const relayerAddress = document.getElementById('relayerAddress').value.trim();
+  const usdcAddress = document.getElementById('usdcAddress').value.trim();
+
+  // Validate addresses
+  for (const [name, addr] of [['Fee Wallet', feeWallet], ['Safe', safeAddress], ['Relayer', relayerAddress], ['USDC', usdcAddress]]) {
+    if (!ethers.isAddress(addr)) {
+      log(`Invalid address for ${name}: ${addr}`, 'log-err');
+      return;
+    }
+  }
+
+  document.getElementById('deployBtn').disabled = true;
+
+  try {
+    // === Step 0: Deploy PayFee implementation ===
+    setStep(0, 'active');
+    deployed.payFeeImpl = await deployContract('PayFee (impl)', artifacts.PayFee.abi, artifacts.PayFee.bytecode);
+    setStep(0, 'done', deployed.payFeeImpl);
+
+    // === Step 1: Deploy PayFee proxy ===
+    setStep(1, 'active');
+    const payFeeIface = new ethers.Interface(artifacts.PayFee.abi);
+    const payFeeInitData = payFeeIface.encodeFunctionData('initialize', [deployerAddress]);
+    deployed.payFeeProxy = await deployContract(
+      'PayFee (proxy)',
+      artifacts.ERC1967Proxy.abi,
+      artifacts.ERC1967Proxy.bytecode,
+      [deployed.payFeeImpl, payFeeInitData]
+    );
+    setStep(1, 'done', deployed.payFeeProxy);
+
+    // === Step 2: Deploy PayDirect ===
+    setStep(2, 'active');
+    deployed.payDirect = await deployContract(
+      'PayDirect',
+      artifacts.PayDirect.abi,
+      artifacts.PayDirect.bytecode,
+      [usdcAddress, deployed.payFeeProxy, feeWallet, relayerAddress]
+    );
+    setStep(2, 'done', deployed.payDirect);
+
+    // === Step 3: Deploy PayTab ===
+    setStep(3, 'active');
+    deployed.payTab = await deployContract(
+      'PayTab',
+      artifacts.PayTab.abi,
+      artifacts.PayTab.bytecode,
+      [usdcAddress, deployed.payFeeProxy, feeWallet, relayerAddress]
+    );
+    setStep(3, 'done', deployed.payTab);
+
+    // === Step 4: Deploy PayRouter implementation ===
+    setStep(4, 'active');
+    deployed.payRouterImpl = await deployContract('PayRouter (impl)', artifacts.PayRouter.abi, artifacts.PayRouter.bytecode);
+    setStep(4, 'done', deployed.payRouterImpl);
+
+    // === Step 5: Deploy PayRouter proxy ===
+    setStep(5, 'active');
+    const payRouterIface = new ethers.Interface(artifacts.PayRouter.abi);
+    const payRouterInitData = payRouterIface.encodeFunctionData('initialize', [
+      deployerAddress, usdcAddress, deployed.payFeeProxy, feeWallet
+    ]);
+    deployed.payRouterProxy = await deployContract(
+      'PayRouter (proxy)',
+      artifacts.ERC1967Proxy.abi,
+      artifacts.ERC1967Proxy.bytecode,
+      [deployed.payRouterImpl, payRouterInitData]
+    );
+    setStep(5, 'done', deployed.payRouterProxy);
+
+    // === Step 6-8: Authorize callers on PayFee ===
+    const payFee = new ethers.Contract(deployed.payFeeProxy, artifacts.PayFee.abi, signer);
+
+    setStep(6, 'active');
+    log('PayFee: authorizing PayDirect...');
+    let tx = await payFee.authorizeCaller(deployed.payDirect);
+    await tx.wait();
+    setStep(6, 'done');
+    log('PayFee: PayDirect authorized', 'log-ok');
+
+    setStep(7, 'active');
+    log('PayFee: authorizing PayTab...');
+    tx = await payFee.authorizeCaller(deployed.payTab);
+    await tx.wait();
+    setStep(7, 'done');
+    log('PayFee: PayTab authorized', 'log-ok');
+
+    setStep(8, 'active');
+    log('PayFee: authorizing PayRouter...');
+    tx = await payFee.authorizeCaller(deployed.payRouterProxy);
+    await tx.wait();
+    setStep(8, 'done');
+    log('PayFee: PayRouter authorized', 'log-ok');
+
+    // === Step 9: Authorize relayer on PayRouter ===
+    setStep(9, 'active');
+    const payRouter = new ethers.Contract(deployed.payRouterProxy, artifacts.PayRouter.abi, signer);
+    log(`PayRouter: authorizing relayer ${relayerAddress}...`);
+    tx = await payRouter.authorizeRelayer(relayerAddress);
+    await tx.wait();
+    setStep(9, 'done');
+    log('PayRouter: relayer authorized', 'log-ok');
+
+    // === Step 10-11: Transfer ownership to Safe ===
+    if (safeAddress.toLowerCase() !== deployerAddress.toLowerCase()) {
+      setStep(10, 'active');
+      log(`PayFee: transferring ownership to Safe ${safeAddress}...`);
+      tx = await payFee.transferOwnership(safeAddress);
+      await tx.wait();
+      setStep(10, 'done');
+      log('PayFee: ownership transferred', 'log-ok');
+
+      setStep(11, 'active');
+      log(`PayRouter: transferring ownership to Safe ${safeAddress}...`);
+      tx = await payRouter.transferOwnership(safeAddress);
+      await tx.wait();
+      setStep(11, 'done');
+      log('PayRouter: ownership transferred', 'log-ok');
+    } else {
+      setStep(10, 'done', 'skipped (deployer = safe)');
+      setStep(11, 'done', 'skipped (deployer = safe)');
+      log('Ownership transfer skipped (deployer is the safe)', 'log-warn');
+    }
+
+    // === Show summary ===
+    const summary = `=== Pay Protocol — Base Mainnet ===
+Network:           Base Mainnet (chainId 8453)
+Deployer:          ${deployerAddress}
+Admin/Safe:        ${safeAddress}
+Fee Wallet:        ${feeWallet}
+Relayer:           ${relayerAddress}
+
+--- Contracts ---
+USDC (native):     ${usdcAddress}
+PayFee (proxy):    ${deployed.payFeeProxy}
+PayFee (impl):     ${deployed.payFeeImpl}
+PayDirect:         ${deployed.payDirect}
+PayTab:            ${deployed.payTab}
+PayRouter (proxy): ${deployed.payRouterProxy}
+PayRouter (impl):  ${deployed.payRouterImpl}
+
+--- Server .env snippet ---
+CHAIN_ID=8453
+USDC_ADDRESS=${usdcAddress}
+PAY_FEE_ADDRESS=${deployed.payFeeProxy}
+PAY_DIRECT_ADDRESS=${deployed.payDirect}
+PAY_TAB_ADDRESS=${deployed.payTab}
+PAY_ROUTER_ADDRESS=${deployed.payRouterProxy}
+FEE_WALLET=${feeWallet}
+
+--- pay.md spec update ---
+contracts:
+  router: "${deployed.payRouterProxy}"
+  tab: "${deployed.payTab}"
+  direct: "${deployed.payDirect}"
+  fee: "${deployed.payFeeProxy}"
+  usdc: "${usdcAddress}"`;
+
+    document.getElementById('summaryText').textContent = summary;
+    document.getElementById('summary').classList.remove('hidden');
+    log('=== DEPLOYMENT COMPLETE ===', 'log-ok');
+
+  } catch (e) {
+    log(`DEPLOY FAILED: ${e.message}`, 'log-err');
+    // Mark current active step as error
+    for (let i = 0; i < 12; i++) {
+      const el = document.getElementById(`step-${i}`);
+      if (el.classList.contains('step-active')) {
+        setStep(i, 'error', e.message.slice(0, 80));
+        break;
+      }
+    }
+    document.getElementById('deployBtn').disabled = false;
+  }
+}
+</script>
+
+</body>
+</html>
