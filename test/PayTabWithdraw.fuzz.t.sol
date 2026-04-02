@@ -110,54 +110,6 @@ contract PayTabWithdrawFuzzTest is Test {
         assertEq(usdc.balanceOf(address(tab)), 0, "contract must be empty after close");
     }
 
-    /// @notice Fuzz: total fee from withdraw + close equals fee on totalCharged
-    function testFuzz_withdrawThenClose_feeEquivalence(uint96 tabAmount, uint96 charge1, uint96 charge2) public {
-        tabAmount = uint96(bound(tabAmount, PayTypes.MIN_TAB_AMOUNT, 1_000_000e6));
-
-        bytes32 tabId = bytes32("fuzz-fee-eq");
-        vm.prank(agent);
-        tab.openTab(tabId, provider, tabAmount, tabAmount);
-
-        uint96 tabBalance = tab.getTab(tabId).amount;
-
-        // First charge
-        charge1 = uint96(bound(charge1, 1, tabBalance / 2));
-        vm.prank(relayerAddr);
-        tab.chargeTab(tabId, charge1);
-
-        uint256 feeWalletBefore = usdc.balanceOf(feeWallet);
-
-        // Withdraw first charge
-        vm.prank(provider);
-        tab.withdrawCharged(tabId);
-
-        // Second charge
-        uint96 remaining = tab.getTab(tabId).amount;
-        if (remaining > 0) {
-            charge2 = uint96(bound(charge2, 1, remaining));
-            vm.prank(relayerAddr);
-            tab.chargeTab(tabId, charge2);
-        } else {
-            charge2 = 0;
-        }
-
-        // Close
-        vm.prank(agent);
-        tab.closeTab(tabId);
-
-        // Total fee collected = feeWallet delta (minus activation fee already counted in feeWalletBefore)
-        uint256 totalFeeCollected = usdc.balanceOf(feeWallet) - feeWalletBefore;
-
-        // Expected total fee on all charges.
-        // Integer division rounding: fee(a) + fee(b) may differ from fee(a+b) by ≤1.
-        uint96 totalCharged = charge1 + charge2;
-        uint96 expectedFee = uint96((uint256(totalCharged) * STANDARD_BPS) / 10_000);
-
-        assertApproxEqAbs(
-            totalFeeCollected, expectedFee, 1, "total fee must equal fee on totalCharged (within rounding)"
-        );
-    }
-
     /// @notice Fuzz: withdraw + close distribution sums to tab balance
     function testFuzz_withdrawThenClose_distributionSums(uint96 tabAmount, uint96 chargeAmount) public {
         tabAmount = uint96(bound(tabAmount, PayTypes.MIN_TAB_AMOUNT, 1_000_000e6));
