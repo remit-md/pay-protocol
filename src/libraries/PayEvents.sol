@@ -23,6 +23,8 @@ library PayEvents {
 
     event TabToppedUp(bytes32 indexed tabId, uint96 amount, uint96 newBalance);
 
+    event TabWithdrawn(bytes32 indexed tabId, uint96 amount, uint96 fee, uint96 totalWithdrawn);
+
     // === x402 Events ===
     event X402Settled(address indexed from, address indexed to, uint96 amount, uint96 fee, bytes32 indexed nonce);
 

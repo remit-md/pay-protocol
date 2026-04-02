@@ -43,7 +43,12 @@ interface IPayTab {
     /// @dev Only callable by the authorized relayer.
     function topUpTabFor(address agent, bytes32 tabId, uint96 amount) external;
 
-    /// @notice Close a tab. Distributes funds: provider gets totalCharged minus fee, fee wallet gets fee, agent gets remaining balance.
+    /// @notice Provider withdraws all unwithdrawn charged funds minus fee. Tab stays open.
+    /// @param tabId The tab to withdraw from.
+    /// @dev Callable by provider or relayer. Withdraws (totalCharged - totalWithdrawn).
+    function withdrawCharged(bytes32 tabId) external;
+
+    /// @notice Close a tab. Distributes funds: provider gets unwithdrawn charges minus fee, fee wallet gets fee, agent gets remaining balance.
     /// @param tabId The tab to close.
     /// @dev Callable by agent, provider, or relayer. Unilateral — neither party can block the other.
     function closeTab(bytes32 tabId) external;

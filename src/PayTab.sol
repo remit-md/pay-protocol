@@ -141,13 +141,57 @@ contract PayTab is IPayTab, ReentrancyGuard {
     }
 
     // =========================================================================
+    // IPayTab — withdrawCharged
+    // =========================================================================
+
+    /// @inheritdoc IPayTab
+    /// @dev CEI: checks → effects (update totalWithdrawn + volume) → interactions (USDC transfers).
+    ///      Withdraws all unwithdrawn charges minus processing fee. Tab stays open.
+    function withdrawCharged(bytes32 tabId) external nonReentrant {
+        PayTypes.Tab storage t = _tabs[tabId];
+
+        // --- Checks ---
+        if (t.agent == address(0)) revert PayErrors.TabNotFound(tabId);
+        if (t.status != PayTypes.TabStatus.Active) revert PayErrors.TabClosed(tabId);
+        if (msg.sender != t.provider && msg.sender != relayer) {
+            revert PayErrors.Unauthorized(msg.sender);
+        }
+
+        uint96 unwithdrawn = t.totalCharged - t.totalWithdrawn;
+        if (unwithdrawn == 0) revert PayErrors.NothingToWithdraw(tabId);
+
+        // Calculate fee on the unwithdrawn amount
+        uint96 rateBps = payFee.getFeeRate(t.provider);
+        uint96 fee = uint96((uint256(unwithdrawn) * rateBps) / 10_000);
+        uint96 payout = unwithdrawn - fee;
+
+        // --- Effects ---
+        t.totalWithdrawn += unwithdrawn;
+
+        // Record volume for provider
+        payFee.recordTransaction(t.provider, unwithdrawn);
+
+        // --- Interactions ---
+        if (payout > 0) {
+            bool sent = usdc.transfer(t.provider, payout);
+            if (!sent) revert PayErrors.TransferFailed();
+        }
+        if (fee > 0) {
+            bool sent = usdc.transfer(feeWallet, fee);
+            if (!sent) revert PayErrors.TransferFailed();
+        }
+
+        emit PayEvents.TabWithdrawn(tabId, payout, fee, t.totalWithdrawn);
+    }
+
+    // =========================================================================
     // IPayTab — closeTab
     // =========================================================================
 
     /// @inheritdoc IPayTab
     /// @dev CEI: checks → effects (status + volume) → interactions (USDC transfers).
-    ///      Distribution: provider gets totalCharged - fee, fee wallet gets fee, agent gets remaining.
-    ///      If totalCharged == 0, no fee, full balance refunded to agent.
+    ///      Distribution: provider gets unwithdrawn charges minus fee, fee wallet gets fee, agent gets remaining.
+    ///      Funds already paid out via withdrawCharged are excluded.
     function closeTab(bytes32 tabId) external nonReentrant {
         PayTypes.Tab storage t = _tabs[tabId];
 
@@ -162,24 +206,26 @@ contract PayTab is IPayTab, ReentrancyGuard {
         address agent = t.agent;
         address provider = t.provider;
         uint96 totalCharged = t.totalCharged;
+        uint96 totalWithdrawn = t.totalWithdrawn;
         uint96 remaining = t.amount;
 
-        // Calculate fee on totalCharged (not on remaining balance)
+        // Calculate fee only on unwithdrawn charges (withdrawn portion already had fee deducted)
+        uint96 unwithdrawn = totalCharged - totalWithdrawn;
         uint96 fee = 0;
         uint96 providerPayout = 0;
-        if (totalCharged > 0) {
+        if (unwithdrawn > 0) {
             uint96 rateBps = payFee.getFeeRate(provider);
-            fee = uint96((uint256(totalCharged) * rateBps) / 10_000);
-            providerPayout = totalCharged - fee;
+            fee = uint96((uint256(unwithdrawn) * rateBps) / 10_000);
+            providerPayout = unwithdrawn - fee;
         }
 
         // --- Effects ---
         t.status = PayTypes.TabStatus.Closed;
         t.amount = 0;
 
-        // Record volume for provider (even if fee is dust/zero)
-        if (totalCharged > 0) {
-            payFee.recordTransaction(provider, totalCharged);
+        // Record volume only for the unwithdrawn portion (withdrawn portion already recorded)
+        if (unwithdrawn > 0) {
+            payFee.recordTransaction(provider, unwithdrawn);
         }
 
         // --- Interactions ---
@@ -235,7 +281,8 @@ contract PayTab is IPayTab, ReentrancyGuard {
             maxChargePerCall: maxChargePerCall,
             activationFee: activationFee,
             status: PayTypes.TabStatus.Active,
-            chargeCount: 0
+            chargeCount: 0,
+            totalWithdrawn: 0
         });
 
         // --- Interactions ---

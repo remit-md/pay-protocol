@@ -18,6 +18,7 @@ library PayErrors {
     error TabAlreadyExists(bytes32 tabId);
     error ChargeLimitExceeded(bytes32 tabId, uint96 amount, uint96 maxCharge);
     error InsufficientBalance(bytes32 tabId, uint96 amount, uint96 balance);
+    error NothingToWithdraw(bytes32 tabId);
     error SelfPayment(address wallet);
 
     // Transfer

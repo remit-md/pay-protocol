@@ -15,6 +15,7 @@ library PayTypes {
     ///      Slot 1: provider (20) + totalCharged (12) = 32
     ///      Slot 2: maxChargePerCall (12) + activationFee (12) + status (1) = 25
     ///      Slot 3: chargeCount (32)
+    ///      Slot 4: totalWithdrawn (12) + 20 free
     struct Tab {
         address agent;
         uint96 amount; // current remaining balance
@@ -24,6 +25,7 @@ library PayTypes {
         uint96 activationFee; // fee paid at open
         TabStatus status;
         uint256 chargeCount; // number of charges applied
+        uint96 totalWithdrawn; // cumulative amount provider has withdrawn
     }
 
     /// @notice Fee tiers — cliff model (not marginal)
