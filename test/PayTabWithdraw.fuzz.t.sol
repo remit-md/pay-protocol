@@ -86,7 +86,7 @@ contract PayTabWithdrawFuzzTest is Test {
         tab.openTab(tabId, provider, tabAmount, maxCharge);
 
         uint96 tabBalance = tab.getTab(tabId).amount;
-        chargeAmount = uint96(bound(chargeAmount, 1, tabBalance));
+        chargeAmount = uint96(bound(chargeAmount, PayTypes.MIN_DIRECT_AMOUNT, tabBalance));
 
         // Charge
         vm.prank(relayerAddr);
@@ -119,7 +119,7 @@ contract PayTabWithdrawFuzzTest is Test {
         tab.openTab(tabId, provider, tabAmount, tabAmount);
 
         uint96 tabBalance = tab.getTab(tabId).amount;
-        chargeAmount = uint96(bound(chargeAmount, 1, tabBalance));
+        chargeAmount = uint96(bound(chargeAmount, PayTypes.MIN_DIRECT_AMOUNT, tabBalance));
 
         vm.prank(relayerAddr);
         tab.chargeTab(tabId, chargeAmount);
