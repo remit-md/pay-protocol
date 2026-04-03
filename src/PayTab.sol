@@ -159,6 +159,9 @@ contract PayTab is IPayTab, ReentrancyGuard {
 
         uint96 unwithdrawn = t.totalCharged - t.totalWithdrawn;
         if (unwithdrawn == 0) revert PayErrors.NothingToWithdraw(tabId);
+        if (unwithdrawn < PayTypes.MIN_DIRECT_AMOUNT) {
+            revert PayErrors.BelowMinimum(unwithdrawn, PayTypes.MIN_DIRECT_AMOUNT);
+        }
 
         // Calculate fee on the unwithdrawn amount
         uint96 rateBps = payFee.getFeeRate(t.provider);

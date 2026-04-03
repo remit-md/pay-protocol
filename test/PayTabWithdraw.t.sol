@@ -225,6 +225,33 @@ contract PayTabWithdrawTest is Test {
     }
 
     // =========================================================================
+    // withdrawCharged — minimum withdrawal ($1.00)
+    // =========================================================================
+
+    function test_withdrawCharged_belowMinimum() public {
+        // Charge $0.50 — below $1.00 minimum
+        vm.prank(relayerAddr);
+        tab.chargeTab(TAB_ID, 500_000);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(PayErrors.BelowMinimum.selector, 500_000, PayTypes.MIN_DIRECT_AMOUNT)
+        );
+        vm.prank(provider);
+        tab.withdrawCharged(TAB_ID);
+    }
+
+    function test_withdrawCharged_exactMinimum() public {
+        // Charge exactly $1.00 — should succeed
+        vm.prank(relayerAddr);
+        tab.chargeTab(TAB_ID, 1_000_000);
+
+        vm.prank(provider);
+        tab.withdrawCharged(TAB_ID);
+
+        assertGt(usdc.balanceOf(provider), 0);
+    }
+
+    // =========================================================================
     // withdrawCharged — access control
     // =========================================================================
 
