@@ -85,7 +85,7 @@ contract PayTabV2 is IPayTabV2, ReentrancyGuard {
     // settleCharges — NEW in v2
     // =========================================================================
 
-    /// @inheritdoc IPayTabV2V2
+    /// @inheritdoc IPayTabV2
     /// @dev Only relayer. No USDC transfer — just SSTORE.
     ///      CEI: checks -> effects -> no interactions.
     ///      ~35K gas regardless of batch size (3 SSTORE updates + 1 event).
