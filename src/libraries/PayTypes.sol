@@ -39,5 +39,9 @@ library PayTypes {
     uint96 constant MIN_TAB_AMOUNT = 5_000_000; // $5.00 in USDC (6 decimals)
 
     /// @notice Activation fee floor
-    uint96 constant MIN_ACTIVATION_FEE = 100_000; // $0.10 in USDC (6 decimals)
+    uint96 constant MIN_ACTIVATION_FEE = 500_000; // $0.50 in USDC (6 decimals)
+
+    /// @notice Per-charge minimum fee (server-enforced, not contract-enforced)
+    /// @dev max($0.002, 1%) per charge. Below $0.20/call the floor kicks in.
+    uint96 constant MIN_CHARGE_FEE = 2_000; // $0.002 in USDC (6 decimals)
 }

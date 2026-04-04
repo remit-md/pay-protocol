@@ -7,6 +7,7 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 import {PayFee} from "../src/PayFee.sol";
 import {PayDirect} from "../src/PayDirect.sol";
 import {PayTab} from "../src/PayTab.sol";
+import {PayTabV2} from "../src/PayTabV2.sol";
 import {PayRouter} from "../src/PayRouter.sol";
 
 /// @title DeployMainnet
@@ -36,6 +37,7 @@ contract DeployMainnet is Script {
     address internal _payFeeProxy;
     address internal _payDirect;
     address internal _payTab;
+    address internal _payTabV2;
     address internal _payRouterProxy;
 
     function run() external {
@@ -60,6 +62,7 @@ contract DeployMainnet is Script {
         _deployPayFee(deployer);
         _deployPayDirect(deployer, feeWallet);
         _deployPayTab(deployer, feeWallet);
+        _deployPayTabV2(deployer, feeWallet);
         _deployPayRouter(deployer, feeWallet);
         _authorizeCallers();
         _authorizeRelayer(deployer);
@@ -88,10 +91,16 @@ contract DeployMainnet is Script {
         console2.log("PayDirect:         ", _payDirect);
     }
 
-    /// @dev Deploy PayTab (immutable). feeWallet and deployer (as relayer) are immutable.
+    /// @dev Deploy PayTab v1 (immutable). feeWallet and deployer (as relayer) are immutable.
     function _deployPayTab(address deployer, address feeWallet) internal {
         _payTab = address(new PayTab(USDC, _payFeeProxy, feeWallet, deployer));
-        console2.log("PayTab:            ", _payTab);
+        console2.log("PayTab (v1):       ", _payTab);
+    }
+
+    /// @dev Deploy PayTab v2 (immutable, batch settlement). feeWallet and deployer (as relayer) are immutable.
+    function _deployPayTabV2(address deployer, address feeWallet) internal {
+        _payTabV2 = address(new PayTabV2(USDC, _payFeeProxy, feeWallet, deployer));
+        console2.log("PayTabV2:          ", _payTabV2);
     }
 
     /// @dev Deploy PayRouter behind UUPS proxy. Deployer is initial owner, feeWallet receives fees.
@@ -107,8 +116,9 @@ contract DeployMainnet is Script {
         PayFee feeProxy = PayFee(_payFeeProxy);
         feeProxy.authorizeCaller(_payDirect);
         feeProxy.authorizeCaller(_payTab);
+        feeProxy.authorizeCaller(_payTabV2);
         feeProxy.authorizeCaller(_payRouterProxy);
-        console2.log("PayFee: authorized PayDirect, PayTab, PayRouter");
+        console2.log("PayFee: authorized PayDirect, PayTab, PayTabV2, PayRouter");
     }
 
     /// @dev Authorize the deployer as a relayer on PayRouter (for x402 settlements).
@@ -138,7 +148,8 @@ contract DeployMainnet is Script {
         console2.log("USDC (native):     ", USDC);
         console2.log("PayFee (proxy):    ", _payFeeProxy);
         console2.log("PayDirect:         ", _payDirect);
-        console2.log("PayTab:            ", _payTab);
+        console2.log("PayTab (v1):       ", _payTab);
+        console2.log("PayTabV2:          ", _payTabV2);
         console2.log("PayRouter (proxy): ", _payRouterProxy);
         console2.log("");
         console2.log("--- Server .env snippet ---");
@@ -149,6 +160,7 @@ contract DeployMainnet is Script {
         console2.log("PAY_FEE_ADDRESS=", _payFeeProxy);
         console2.log("PAY_DIRECT_ADDRESS=", _payDirect);
         console2.log("PAY_TAB_ADDRESS=", _payTab);
+        console2.log("PAY_TAB_V2_ADDRESS=", _payTabV2);
         console2.log("PAY_ROUTER_ADDRESS=", _payRouterProxy);
         console2.log("FEE_WALLET=", feeWallet);
     }
