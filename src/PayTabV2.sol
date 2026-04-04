@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+import {IPayTab} from "./interfaces/IPayTab.sol";
 import {IPayTabV2} from "./interfaces/IPayTabV2.sol";
 import {IPayFee} from "./interfaces/IPayFee.sol";
 import {IUSDC} from "./interfaces/IUSDC.sol";
@@ -116,12 +117,12 @@ contract PayTabV2 is IPayTabV2, ReentrancyGuard {
     // IPayTab — openTab (identical to v1)
     // =========================================================================
 
-    /// @inheritdoc IPayTabV2
+    /// @inheritdoc IPayTab
     function openTab(bytes32 tabId, address provider, uint96 amount, uint96 maxChargePerCall) external nonReentrant {
         _openTab(msg.sender, tabId, provider, amount, maxChargePerCall);
     }
 
-    /// @inheritdoc IPayTabV2
+    /// @inheritdoc IPayTab
     function openTabFor(address agent, bytes32 tabId, address provider, uint96 amount, uint96 maxChargePerCall)
         external
         nonReentrant
@@ -135,7 +136,7 @@ contract PayTabV2 is IPayTabV2, ReentrancyGuard {
     // IPayTab — chargeTab (retained for backwards compat / single-charge use)
     // =========================================================================
 
-    /// @inheritdoc IPayTabV2
+    /// @inheritdoc IPayTab
     /// @dev Only relayer. No USDC transfer — just SSTORE.
     function chargeTab(bytes32 tabId, uint96 amount) external onlyRelayer {
         PayTypes.Tab storage t = _tabs[tabId];
@@ -157,12 +158,12 @@ contract PayTabV2 is IPayTabV2, ReentrancyGuard {
     // IPayTab — topUpTab
     // =========================================================================
 
-    /// @inheritdoc IPayTabV2
+    /// @inheritdoc IPayTab
     function topUpTab(bytes32 tabId, uint96 amount) external nonReentrant {
         _topUp(msg.sender, tabId, amount);
     }
 
-    /// @inheritdoc IPayTabV2
+    /// @inheritdoc IPayTab
     function topUpTabFor(address agent, bytes32 tabId, uint96 amount) external nonReentrant onlyRelayer {
         if (agent == address(0)) revert PayErrors.ZeroAddress();
         _topUp(agent, tabId, amount);
@@ -172,7 +173,7 @@ contract PayTabV2 is IPayTabV2, ReentrancyGuard {
     // IPayTab — withdrawCharged
     // =========================================================================
 
-    /// @inheritdoc IPayTabV2
+    /// @inheritdoc IPayTab
     function withdrawCharged(bytes32 tabId) external nonReentrant {
         PayTypes.Tab storage t = _tabs[tabId];
 
@@ -211,7 +212,7 @@ contract PayTabV2 is IPayTabV2, ReentrancyGuard {
     // IPayTab — closeTab
     // =========================================================================
 
-    /// @inheritdoc IPayTabV2
+    /// @inheritdoc IPayTab
     function closeTab(bytes32 tabId) external nonReentrant {
         PayTypes.Tab storage t = _tabs[tabId];
 
@@ -263,7 +264,7 @@ contract PayTabV2 is IPayTabV2, ReentrancyGuard {
     // IPayTab — getTab
     // =========================================================================
 
-    /// @inheritdoc IPayTabV2
+    /// @inheritdoc IPayTab
     function getTab(bytes32 tabId) external view returns (PayTypes.Tab memory tab) {
         tab = _tabs[tabId];
         if (tab.agent == address(0)) revert PayErrors.TabNotFound(tabId);
