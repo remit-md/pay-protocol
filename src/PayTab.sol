@@ -25,7 +25,7 @@ import {PayEvents} from "./libraries/PayEvents.sol";
 ///        - closed tab can never be charged, topped up, or reopened
 ///        - only agent or provider or relayer can close
 ///
-///      Activation fee: max($0.10, 1% of tab amount). Paid by agent at open, non-refundable.
+///      Activation fee: max($0.50, 1% of tab amount). Paid by agent at open, non-refundable.
 ///      Sent to feeWallet immediately. Tab balance = amount - activationFee.
 contract PayTab is IPayTab, ReentrancyGuard {
     // =========================================================================
@@ -323,8 +323,8 @@ contract PayTab is IPayTab, ReentrancyGuard {
     }
 
     /// @dev Activation fee: max(MIN_ACTIVATION_FEE, amount / 100).
-    ///      At MIN_TAB_AMOUNT ($5), fee = max($0.10, $0.05) = $0.10.
-    ///      At $10+, fee = 1% of amount.
+    ///      At MIN_TAB_AMOUNT ($5), fee = max($0.50, $0.05) = $0.50.
+    ///      At $50+, fee = 1% of amount.
     function _calculateActivationFee(uint96 amount) internal pure returns (uint96) {
         uint96 percentFee = amount / 100;
         return percentFee > PayTypes.MIN_ACTIVATION_FEE ? percentFee : PayTypes.MIN_ACTIVATION_FEE;

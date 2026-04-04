@@ -225,10 +225,10 @@ contract PayLifecycleFuzzTest is Test {
     // Activation fee crossover edge case
     // =========================================================================
 
-    /// @notice At exactly $10 (10_000_000), amount/100 == MIN_ACTIVATION_FEE ($0.10).
-    ///         Below $10: fee == MIN. At/above $10: fee == amount/100. Verify crossover.
+    /// @notice At exactly $50 (50_000_000), amount/100 == MIN_ACTIVATION_FEE ($0.50).
+    ///         Below $50: fee == MIN. At/above $50: fee == amount/100. Verify crossover.
     function testFuzz_activationFee_crossover(uint96 tabAmount) public {
-        tabAmount = uint96(bound(tabAmount, MIN_TAB, 20e6)); // $5 - $20 range around crossover
+        tabAmount = uint96(bound(tabAmount, MIN_TAB, 100e6)); // $5 - $100 range around crossover
 
         usdc.mint(agent, tabAmount);
         vm.prank(agent);
