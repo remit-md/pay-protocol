@@ -13,6 +13,7 @@ on:
         type: choice
         options:
           - DeployTestnet.s.sol
+          - DeployTabV2Testnet.s.sol
       dry_run:
         description: "Simulate only (no broadcast)"
         required: false
@@ -44,6 +45,9 @@ jobs:
         env:
           FOUNDRY_PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
           ALCHEMY_BASE_SEPOLIA_URL: ${{ secrets.ALCHEMY_BASE_SEPOLIA_URL }}
+          # Existing contract addresses for incremental deploys (e.g. DeployTabV2Testnet)
+          USDC_ADDRESS: "0x3A27F4136c51B12fA7326f4897F8E55db3922D32"
+          PAY_FEE_ADDRESS: "0x11af2Bb838E65bC53712D13E1300009fA1A4327C"
         run: |
           FLAGS="--rpc-url $ALCHEMY_BASE_SEPOLIA_URL -vvvv"
           if [ "${{ inputs.dry_run }}" = "false" ]; then

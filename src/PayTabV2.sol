@@ -4,30 +4,31 @@ pragma solidity ^0.8.24;
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import {IPayTab} from "./interfaces/IPayTab.sol";
+import {IPayTabV2} from "./interfaces/IPayTabV2.sol";
 import {IPayFee} from "./interfaces/IPayFee.sol";
 import {IUSDC} from "./interfaces/IUSDC.sol";
 import {PayTypes} from "./libraries/PayTypes.sol";
 import {PayErrors} from "./libraries/PayErrors.sol";
 import {PayEvents} from "./libraries/PayEvents.sol";
 
-/// @title PayTab
-/// @notice Pre-funded metered account. Agent locks USDC, provider charges per use.
+/// @title PayTabV2
+/// @notice Pre-funded metered account with batch settlement. Agent locks USDC, provider charges per use.
 /// @dev IMMUTABLE — no proxy, no admin key, no upgrade path. Holds USDC.
 ///
+///      Identical to PayTab v1 with the addition of settleCharges() for batch settlement.
+///      Deployed alongside v1. v1 is immutable, stays forever. New tabs open on v2.
+///
 ///      State machine:
-///        nonexistent → active (via openTab)
-///        active → active (via chargeTab, topUpTab)
-///        active → closed (via closeTab)
+///        nonexistent -> active (via openTab)
+///        active -> active (via chargeTab, settleCharges, topUpTab)
+///        active -> closed (via closeTab)
 ///
-///      Safety properties:
-///        - totalCharged must never exceed locked amount
-///        - chargeTab amount must never exceed maxChargePerCall
-///        - closed tab can never be charged, topped up, or reopened
-///        - only agent or provider or relayer can close
-///
-///      Activation fee: max($0.50, 1% of tab amount). Paid by agent at open, non-refundable.
-///      Sent to feeWallet immediately. Tab balance = amount - activationFee.
-contract PayTab is IPayTab, ReentrancyGuard {
+///      Trust model change for settleCharges:
+///        Server attests that no individual charge in the batch exceeded maxChargePerCall.
+///        Contract checks the attestation value. Per-charge enforcement moves from real-time
+///        on-chain to attested+auditable. Agent's total risk is still bounded by tab balance.
+///        Fraud is provable via TabSettled event logs.
+contract PayTabV2 is IPayTabV2, ReentrancyGuard {
     // =========================================================================
     // Immutable state (set once in constructor)
     // =========================================================================
@@ -48,14 +49,14 @@ contract PayTab is IPayTab, ReentrancyGuard {
     // Storage
     // =========================================================================
 
-    /// @notice Tab storage. tabId → Tab struct.
+    /// @notice Tab storage. tabId -> Tab struct.
     mapping(bytes32 => PayTypes.Tab) internal _tabs;
 
     // =========================================================================
     // Constructor
     // =========================================================================
 
-    /// @notice Deploy PayTab.
+    /// @notice Deploy PayTabV2.
     /// @param usdc_ USDC token address on Base
     /// @param payFee_ PayFee calculator (proxy address)
     /// @param feeWallet_ Protocol fee wallet
@@ -82,7 +83,38 @@ contract PayTab is IPayTab, ReentrancyGuard {
     }
 
     // =========================================================================
-    // IPayTab — openTab
+    // settleCharges — NEW in v2
+    // =========================================================================
+
+    /// @inheritdoc IPayTabV2
+    /// @dev Only relayer. No USDC transfer — just SSTORE.
+    ///      CEI: checks -> effects -> no interactions.
+    ///      ~35K gas regardless of batch size (3 SSTORE updates + 1 event).
+    function settleCharges(bytes32 tabId, uint96 totalAmount, uint32 chargeCount, uint96 maxSingleCharge)
+        external
+        onlyRelayer
+    {
+        PayTypes.Tab storage t = _tabs[tabId];
+
+        // --- Checks ---
+        if (t.agent == address(0)) revert PayErrors.TabNotFound(tabId);
+        if (t.status != PayTypes.TabStatus.Active) revert PayErrors.TabClosed(tabId);
+        if (totalAmount == 0) revert PayErrors.ZeroAmount();
+        if (totalAmount > t.amount) revert PayErrors.InsufficientBalance(tabId, totalAmount, t.amount);
+        if (maxSingleCharge > t.maxChargePerCall) {
+            revert PayErrors.ChargeLimitExceeded(tabId, maxSingleCharge, t.maxChargePerCall);
+        }
+
+        // --- Effects ---
+        t.amount -= totalAmount;
+        t.totalCharged += totalAmount;
+        t.chargeCount += chargeCount;
+
+        emit PayEvents.TabSettled(tabId, totalAmount, chargeCount, maxSingleCharge, t.amount, t.chargeCount);
+    }
+
+    // =========================================================================
+    // IPayTab — openTab (identical to v1)
     // =========================================================================
 
     /// @inheritdoc IPayTab
@@ -101,23 +133,20 @@ contract PayTab is IPayTab, ReentrancyGuard {
     }
 
     // =========================================================================
-    // IPayTab — chargeTab
+    // IPayTab — chargeTab (retained for backwards compat / single-charge use)
     // =========================================================================
 
     /// @inheritdoc IPayTab
-    /// @dev Only relayer. No USDC transfer — just SSTORE (~$0.000004 gas).
-    ///      CEI: checks → effects → no interactions.
+    /// @dev Only relayer. No USDC transfer — just SSTORE.
     function chargeTab(bytes32 tabId, uint96 amount) external onlyRelayer {
         PayTypes.Tab storage t = _tabs[tabId];
 
-        // --- Checks ---
         if (t.agent == address(0)) revert PayErrors.TabNotFound(tabId);
         if (t.status != PayTypes.TabStatus.Active) revert PayErrors.TabClosed(tabId);
         if (amount == 0) revert PayErrors.ZeroAmount();
         if (amount > t.maxChargePerCall) revert PayErrors.ChargeLimitExceeded(tabId, amount, t.maxChargePerCall);
         if (amount > t.amount) revert PayErrors.InsufficientBalance(tabId, amount, t.amount);
 
-        // --- Effects ---
         t.amount -= amount;
         t.totalCharged += amount;
         t.chargeCount += 1;
@@ -145,12 +174,9 @@ contract PayTab is IPayTab, ReentrancyGuard {
     // =========================================================================
 
     /// @inheritdoc IPayTab
-    /// @dev CEI: checks → effects (update totalWithdrawn + volume) → interactions (USDC transfers).
-    ///      Withdraws all unwithdrawn charges minus processing fee. Tab stays open.
     function withdrawCharged(bytes32 tabId) external nonReentrant {
         PayTypes.Tab storage t = _tabs[tabId];
 
-        // --- Checks ---
         if (t.agent == address(0)) revert PayErrors.TabNotFound(tabId);
         if (t.status != PayTypes.TabStatus.Active) revert PayErrors.TabClosed(tabId);
         if (msg.sender != t.provider && msg.sender != relayer) {
@@ -163,18 +189,13 @@ contract PayTab is IPayTab, ReentrancyGuard {
             revert PayErrors.BelowMinimum(unwithdrawn, PayTypes.MIN_DIRECT_AMOUNT);
         }
 
-        // Calculate fee on the unwithdrawn amount
         uint96 rateBps = payFee.getFeeRate(t.provider);
         uint96 fee = uint96((uint256(unwithdrawn) * rateBps) / 10_000);
         uint96 payout = unwithdrawn - fee;
 
-        // --- Effects ---
         t.totalWithdrawn += unwithdrawn;
-
-        // Record volume for provider
         payFee.recordTransaction(t.provider, unwithdrawn);
 
-        // --- Interactions ---
         if (payout > 0) {
             bool sent = usdc.transfer(t.provider, payout);
             if (!sent) revert PayErrors.TransferFailed();
@@ -192,27 +213,21 @@ contract PayTab is IPayTab, ReentrancyGuard {
     // =========================================================================
 
     /// @inheritdoc IPayTab
-    /// @dev CEI: checks → effects (status + volume) → interactions (USDC transfers).
-    ///      Distribution: provider gets unwithdrawn charges minus fee, fee wallet gets fee, agent gets remaining.
-    ///      Funds already paid out via withdrawCharged are excluded.
     function closeTab(bytes32 tabId) external nonReentrant {
         PayTypes.Tab storage t = _tabs[tabId];
 
-        // --- Checks ---
         if (t.agent == address(0)) revert PayErrors.TabNotFound(tabId);
         if (t.status != PayTypes.TabStatus.Active) revert PayErrors.TabClosed(tabId);
         if (msg.sender != t.agent && msg.sender != t.provider && msg.sender != relayer) {
             revert PayErrors.Unauthorized(msg.sender);
         }
 
-        // Snapshot values before modifying storage
         address agent = t.agent;
         address provider = t.provider;
         uint96 totalCharged = t.totalCharged;
         uint96 totalWithdrawn = t.totalWithdrawn;
         uint96 remaining = t.amount;
 
-        // Calculate fee only on unwithdrawn charges (withdrawn portion already had fee deducted)
         uint96 unwithdrawn = totalCharged - totalWithdrawn;
         uint96 fee = 0;
         uint96 providerPayout = 0;
@@ -222,16 +237,13 @@ contract PayTab is IPayTab, ReentrancyGuard {
             providerPayout = unwithdrawn - fee;
         }
 
-        // --- Effects ---
         t.status = PayTypes.TabStatus.Closed;
         t.amount = 0;
 
-        // Record volume only for the unwithdrawn portion (withdrawn portion already recorded)
         if (unwithdrawn > 0) {
             payFee.recordTransaction(provider, unwithdrawn);
         }
 
-        // --- Interactions ---
         if (providerPayout > 0) {
             bool sent = usdc.transfer(provider, providerPayout);
             if (!sent) revert PayErrors.TransferFailed();
@@ -262,20 +274,16 @@ contract PayTab is IPayTab, ReentrancyGuard {
     // Internal
     // =========================================================================
 
-    /// @dev Core openTab logic. CEI: checks → effects (store tab) → interactions (USDC transfers).
     function _openTab(address agent, bytes32 tabId, address provider, uint96 amount, uint96 maxChargePerCall) internal {
-        // --- Checks ---
         if (provider == address(0)) revert PayErrors.ZeroAddress();
         if (agent == provider) revert PayErrors.SelfPayment(agent);
         if (amount < PayTypes.MIN_TAB_AMOUNT) revert PayErrors.BelowMinimum(amount, PayTypes.MIN_TAB_AMOUNT);
         if (maxChargePerCall == 0) revert PayErrors.ZeroAmount();
         if (_tabs[tabId].agent != address(0)) revert PayErrors.TabAlreadyExists(tabId);
 
-        // Calculate activation fee: max($0.10, 1% of amount)
         uint96 activationFee = _calculateActivationFee(amount);
         uint96 tabBalance = amount - activationFee;
 
-        // --- Effects ---
         _tabs[tabId] = PayTypes.Tab({
             agent: agent,
             amount: tabBalance,
@@ -288,9 +296,6 @@ contract PayTab is IPayTab, ReentrancyGuard {
             totalWithdrawn: 0
         });
 
-        // --- Interactions ---
-        // Pull full amount from agent, then send activation fee to fee wallet.
-        // Tab balance stays in this contract.
         bool sent = usdc.transferFrom(agent, address(this), tabBalance);
         if (!sent) revert PayErrors.TransferFailed();
 
@@ -300,22 +305,16 @@ contract PayTab is IPayTab, ReentrancyGuard {
         emit PayEvents.TabOpened(tabId, agent, provider, tabBalance, maxChargePerCall, activationFee);
     }
 
-    /// @dev Core topUp logic. CEI: checks → effects → interactions (USDC transfer).
-    ///      No activation fee on top-ups. Agent must be the tab's agent.
     function _topUp(address caller, bytes32 tabId, uint96 amount) internal {
         PayTypes.Tab storage t = _tabs[tabId];
 
-        // --- Checks ---
         if (t.agent == address(0)) revert PayErrors.TabNotFound(tabId);
         if (t.status != PayTypes.TabStatus.Active) revert PayErrors.TabClosed(tabId);
         if (amount == 0) revert PayErrors.ZeroAmount();
-        // Only the tab's agent (or relayer on their behalf) can top up
         if (caller != t.agent) revert PayErrors.Unauthorized(caller);
 
-        // --- Effects ---
         t.amount += amount;
 
-        // --- Interactions ---
         bool sent = usdc.transferFrom(caller, address(this), amount);
         if (!sent) revert PayErrors.TransferFailed();
 
@@ -323,8 +322,8 @@ contract PayTab is IPayTab, ReentrancyGuard {
     }
 
     /// @dev Activation fee: max(MIN_ACTIVATION_FEE, amount / 100).
-    ///      At MIN_TAB_AMOUNT ($5), fee = max($0.50, $0.05) = $0.50.
-    ///      At $50+, fee = 1% of amount.
+    ///      At $50, fee = max($0.50, $0.50) = $0.50.
+    ///      Above $50, fee = 1% of amount.
     function _calculateActivationFee(uint96 amount) internal pure returns (uint96) {
         uint96 percentFee = amount / 100;
         return percentFee > PayTypes.MIN_ACTIVATION_FEE ? percentFee : PayTypes.MIN_ACTIVATION_FEE;

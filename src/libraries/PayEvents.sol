@@ -25,6 +25,22 @@ library PayEvents {
 
     event TabWithdrawn(bytes32 indexed tabId, uint96 amount, uint96 fee, uint96 totalWithdrawn);
 
+    /// @notice Emitted when a batch of charges is settled on a v2 tab.
+    /// @param tabId The tab that was charged.
+    /// @param totalAmount Sum of all individual charges in this batch.
+    /// @param chargeCount Number of individual charges in the batch.
+    /// @param maxSingleCharge Relayer attestation: largest charge in batch.
+    /// @param balanceRemaining Tab balance after settlement.
+    /// @param totalChargeCount Cumulative charge count on the tab.
+    event TabSettled(
+        bytes32 indexed tabId,
+        uint96 totalAmount,
+        uint32 chargeCount,
+        uint96 maxSingleCharge,
+        uint96 balanceRemaining,
+        uint256 totalChargeCount
+    );
+
     // === x402 Events ===
     event X402Settled(address indexed from, address indexed to, uint96 amount, uint96 fee, bytes32 indexed nonce);
 
