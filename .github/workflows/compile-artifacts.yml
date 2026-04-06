@@ -26,14 +26,14 @@ jobs:
       - name: Extract deploy artifacts
         run: |
           mkdir -p artifacts
-          for contract in PayFee PayDirect PayTab PayRouter; do
+          for contract in PayFee PayDirect PayTab PayTabV2 PayRouter; do
             jq '{abi: .abi, bytecode: .bytecode.object}' "out/${contract}.sol/${contract}.json" > "artifacts/${contract}.json"
           done
           # ERC1967Proxy from OpenZeppelin
           jq '{abi: .abi, bytecode: .bytecode.object}' "out/ERC1967Proxy.sol/ERC1967Proxy.json" > "artifacts/ERC1967Proxy.json"
           # Bundle all into one file for the deploy page
-          jq -s '{PayFee: .[0], PayDirect: .[1], PayTab: .[2], PayRouter: .[3], ERC1967Proxy: .[4]}' \
-            artifacts/PayFee.json artifacts/PayDirect.json artifacts/PayTab.json artifacts/PayRouter.json artifacts/ERC1967Proxy.json \
+          jq -s '{PayFee: .[0], PayDirect: .[1], PayTab: .[2], PayTabV2: .[3], PayRouter: .[4], ERC1967Proxy: .[5]}' \
+            artifacts/PayFee.json artifacts/PayDirect.json artifacts/PayTab.json artifacts/PayTabV2.json artifacts/PayRouter.json artifacts/ERC1967Proxy.json \
             > artifacts/deploy-bundle.json
           echo "=== Artifact sizes ==="
           ls -la artifacts/

@@ -99,7 +99,7 @@
     <span id="walletStatus" style="font-size: 0.8rem; margin-left: 0.5rem;"></span>
   </div>
   <button class="btn-danger" id="deployBtn" onclick="deploy()" disabled>Deploy All Contracts</button>
-  <span style="font-size: 0.75rem; color: #666; margin-left: 0.5rem;">~12 MetaMask confirmations total</span>
+  <span style="font-size: 0.75rem; color: #666; margin-left: 0.5rem;">~14 MetaMask confirmations total</span>
 </div>
 
 <!-- Progress -->
@@ -110,14 +110,16 @@
     <div class="step step-pending" id="step-1"><span class="step-num">2</span><span class="step-label">Deploy PayFee proxy (ERC1967)</span></div>
     <div class="step step-pending" id="step-2"><span class="step-num">3</span><span class="step-label">Deploy PayDirect (immutable)</span></div>
     <div class="step step-pending" id="step-3"><span class="step-num">4</span><span class="step-label">Deploy PayTab (immutable)</span></div>
-    <div class="step step-pending" id="step-4"><span class="step-num">5</span><span class="step-label">Deploy PayRouter implementation</span></div>
-    <div class="step step-pending" id="step-5"><span class="step-num">6</span><span class="step-label">Deploy PayRouter proxy (ERC1967)</span></div>
-    <div class="step step-pending" id="step-6"><span class="step-num">7</span><span class="step-label">PayFee: authorize PayDirect</span></div>
-    <div class="step step-pending" id="step-7"><span class="step-num">8</span><span class="step-label">PayFee: authorize PayTab</span></div>
-    <div class="step step-pending" id="step-8"><span class="step-num">9</span><span class="step-label">PayFee: authorize PayRouter</span></div>
-    <div class="step step-pending" id="step-9"><span class="step-num">10</span><span class="step-label">PayRouter: authorize relayer</span></div>
-    <div class="step step-pending" id="step-10"><span class="step-num">11</span><span class="step-label">PayFee: transfer ownership to Safe</span></div>
-    <div class="step step-pending" id="step-11"><span class="step-num">12</span><span class="step-label">PayRouter: transfer ownership to Safe</span></div>
+    <div class="step step-pending" id="step-4"><span class="step-num">5</span><span class="step-label">Deploy PayTabV2 (immutable, batch settlement)</span></div>
+    <div class="step step-pending" id="step-5"><span class="step-num">6</span><span class="step-label">Deploy PayRouter implementation</span></div>
+    <div class="step step-pending" id="step-6"><span class="step-num">7</span><span class="step-label">Deploy PayRouter proxy (ERC1967)</span></div>
+    <div class="step step-pending" id="step-7"><span class="step-num">8</span><span class="step-label">PayFee: authorize PayDirect</span></div>
+    <div class="step step-pending" id="step-8"><span class="step-num">9</span><span class="step-label">PayFee: authorize PayTab</span></div>
+    <div class="step step-pending" id="step-9"><span class="step-num">10</span><span class="step-label">PayFee: authorize PayTabV2</span></div>
+    <div class="step step-pending" id="step-10"><span class="step-num">11</span><span class="step-label">PayFee: authorize PayRouter</span></div>
+    <div class="step step-pending" id="step-11"><span class="step-num">12</span><span class="step-label">PayRouter: authorize relayer</span></div>
+    <div class="step step-pending" id="step-12"><span class="step-num">13</span><span class="step-label">PayFee: transfer ownership to Safe</span></div>
+    <div class="step step-pending" id="step-13"><span class="step-num">14</span><span class="step-label">PayRouter: transfer ownership to Safe</span></div>
   </div>
   <div id="log"></div>
 </div>
@@ -140,6 +142,7 @@ const deployed = {
   payFeeProxy: null,
   payDirect: null,
   payTab: null,
+  payTabV2: null,
   payRouterImpl: null,
   payRouterProxy: null,
 };
@@ -175,16 +178,16 @@ function loadArtifacts() {
   try {
     const raw = document.getElementById('artifactsInput').value.trim();
     const parsed = JSON.parse(raw);
-    const required = ['PayFee', 'PayDirect', 'PayTab', 'PayRouter', 'ERC1967Proxy'];
+    const required = ['PayFee', 'PayDirect', 'PayTab', 'PayTabV2', 'PayRouter', 'ERC1967Proxy'];
     for (const name of required) {
       if (!parsed[name]?.abi || !parsed[name]?.bytecode) {
         throw new Error(`Missing ABI or bytecode for ${name}`);
       }
     }
     artifacts = parsed;
-    document.getElementById('artifactStatus').textContent = 'Loaded (5 contracts)';
+    document.getElementById('artifactStatus').textContent = 'Loaded (6 contracts)';
     document.getElementById('artifactStatus').style.color = '#16a34a';
-    log('Artifacts loaded: PayFee, PayDirect, PayTab, PayRouter, ERC1967Proxy', 'log-ok');
+    log('Artifacts loaded: PayFee, PayDirect, PayTab, PayTabV2, PayRouter, ERC1967Proxy', 'log-ok');
     checkReady();
   } catch (e) {
     document.getElementById('artifactStatus').textContent = `Error: ${e.message}`;
@@ -317,13 +320,23 @@ async function deploy() {
     );
     setStep(3, 'done', deployed.payTab);
 
-    // === Step 4: Deploy PayRouter implementation ===
+    // === Step 4: Deploy PayTabV2 ===
     setStep(4, 'active');
-    deployed.payRouterImpl = await deployContract('PayRouter (impl)', artifacts.PayRouter.abi, artifacts.PayRouter.bytecode);
-    setStep(4, 'done', deployed.payRouterImpl);
+    deployed.payTabV2 = await deployContract(
+      'PayTabV2',
+      artifacts.PayTabV2.abi,
+      artifacts.PayTabV2.bytecode,
+      [usdcAddress, deployed.payFeeProxy, feeWallet, relayerAddress]
+    );
+    setStep(4, 'done', deployed.payTabV2);
 
-    // === Step 5: Deploy PayRouter proxy ===
+    // === Step 5: Deploy PayRouter implementation ===
     setStep(5, 'active');
+    deployed.payRouterImpl = await deployContract('PayRouter (impl)', artifacts.PayRouter.abi, artifacts.PayRouter.bytecode);
+    setStep(5, 'done', deployed.payRouterImpl);
+
+    // === Step 6: Deploy PayRouter proxy ===
+    setStep(6, 'active');
     const payRouterIface = new ethers.Interface(artifacts.PayRouter.abi);
     const payRouterInitData = payRouterIface.encodeFunctionData('initialize', [
       deployerAddress, usdcAddress, deployed.payFeeProxy, feeWallet
@@ -334,59 +347,66 @@ async function deploy() {
       artifacts.ERC1967Proxy.bytecode,
       [deployed.payRouterImpl, payRouterInitData]
     );
-    setStep(5, 'done', deployed.payRouterProxy);
+    setStep(6, 'done', deployed.payRouterProxy);
 
-    // === Step 6-8: Authorize callers on PayFee ===
+    // === Step 7-10: Authorize callers on PayFee ===
     const payFee = new ethers.Contract(deployed.payFeeProxy, artifacts.PayFee.abi, signer);
 
-    setStep(6, 'active');
+    setStep(7, 'active');
     log('PayFee: authorizing PayDirect...');
     let tx = await payFee.authorizeCaller(deployed.payDirect);
     await tx.wait();
-    setStep(6, 'done');
+    setStep(7, 'done');
     log('PayFee: PayDirect authorized', 'log-ok');
 
-    setStep(7, 'active');
+    setStep(8, 'active');
     log('PayFee: authorizing PayTab...');
     tx = await payFee.authorizeCaller(deployed.payTab);
     await tx.wait();
-    setStep(7, 'done');
+    setStep(8, 'done');
     log('PayFee: PayTab authorized', 'log-ok');
 
-    setStep(8, 'active');
+    setStep(9, 'active');
+    log('PayFee: authorizing PayTabV2...');
+    tx = await payFee.authorizeCaller(deployed.payTabV2);
+    await tx.wait();
+    setStep(9, 'done');
+    log('PayFee: PayTabV2 authorized', 'log-ok');
+
+    setStep(10, 'active');
     log('PayFee: authorizing PayRouter...');
     tx = await payFee.authorizeCaller(deployed.payRouterProxy);
     await tx.wait();
-    setStep(8, 'done');
+    setStep(10, 'done');
     log('PayFee: PayRouter authorized', 'log-ok');
 
-    // === Step 9: Authorize relayer on PayRouter ===
-    setStep(9, 'active');
+    // === Step 11: Authorize relayer on PayRouter ===
+    setStep(11, 'active');
     const payRouter = new ethers.Contract(deployed.payRouterProxy, artifacts.PayRouter.abi, signer);
     log(`PayRouter: authorizing relayer ${relayerAddress}...`);
     tx = await payRouter.authorizeRelayer(relayerAddress);
     await tx.wait();
-    setStep(9, 'done');
+    setStep(11, 'done');
     log('PayRouter: relayer authorized', 'log-ok');
 
-    // === Step 10-11: Transfer ownership to Safe ===
+    // === Step 12-13: Transfer ownership to Safe ===
     if (safeAddress.toLowerCase() !== deployerAddress.toLowerCase()) {
-      setStep(10, 'active');
+      setStep(12, 'active');
       log(`PayFee: transferring ownership to Safe ${safeAddress}...`);
       tx = await payFee.transferOwnership(safeAddress);
       await tx.wait();
-      setStep(10, 'done');
+      setStep(12, 'done');
       log('PayFee: ownership transferred', 'log-ok');
 
-      setStep(11, 'active');
+      setStep(13, 'active');
       log(`PayRouter: transferring ownership to Safe ${safeAddress}...`);
       tx = await payRouter.transferOwnership(safeAddress);
       await tx.wait();
-      setStep(11, 'done');
+      setStep(13, 'done');
       log('PayRouter: ownership transferred', 'log-ok');
     } else {
-      setStep(10, 'done', 'skipped (deployer = safe)');
-      setStep(11, 'done', 'skipped (deployer = safe)');
+      setStep(12, 'done', 'skipped (deployer = safe)');
+      setStep(13, 'done', 'skipped (deployer = safe)');
       log('Ownership transfer skipped (deployer is the safe)', 'log-warn');
     }
 
@@ -404,6 +424,7 @@ PayFee (proxy):    ${deployed.payFeeProxy}
 PayFee (impl):     ${deployed.payFeeImpl}
 PayDirect:         ${deployed.payDirect}
 PayTab:            ${deployed.payTab}
+PayTabV2:          ${deployed.payTabV2}
 PayRouter (proxy): ${deployed.payRouterProxy}
 PayRouter (impl):  ${deployed.payRouterImpl}
 
@@ -413,6 +434,7 @@ USDC_ADDRESS=${usdcAddress}
 PAY_FEE_ADDRESS=${deployed.payFeeProxy}
 PAY_DIRECT_ADDRESS=${deployed.payDirect}
 PAY_TAB_ADDRESS=${deployed.payTab}
+PAY_TAB_V2_ADDRESS=${deployed.payTabV2}
 PAY_ROUTER_ADDRESS=${deployed.payRouterProxy}
 FEE_WALLET=${feeWallet}
 
@@ -420,6 +442,7 @@ FEE_WALLET=${feeWallet}
 contracts:
   router: "${deployed.payRouterProxy}"
   tab: "${deployed.payTab}"
+  tabV2: "${deployed.payTabV2}"
   direct: "${deployed.payDirect}"
   fee: "${deployed.payFeeProxy}"
   usdc: "${usdcAddress}"`;
@@ -431,7 +454,7 @@ contracts:
   } catch (e) {
     log(`DEPLOY FAILED: ${e.message}`, 'log-err');
     // Mark current active step as error
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 14; i++) {
       const el = document.getElementById(`step-${i}`);
       if (el.classList.contains('step-active')) {
         setStep(i, 'error', e.message.slice(0, 80));
