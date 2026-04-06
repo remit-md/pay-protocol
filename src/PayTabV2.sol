@@ -322,8 +322,8 @@ contract PayTabV2 is IPayTabV2, ReentrancyGuard {
     }
 
     /// @dev Activation fee: max(MIN_ACTIVATION_FEE, amount / 100).
-    ///      At $50, fee = max($0.50, $0.50) = $0.50.
-    ///      Above $50, fee = 1% of amount.
+    ///      At $10, fee = max($0.10, $0.10) = $0.10.
+    ///      Above $10, fee = 1% of amount.
     function _calculateActivationFee(uint96 amount) internal pure returns (uint96) {
         uint96 percentFee = amount / 100;
         return percentFee > PayTypes.MIN_ACTIVATION_FEE ? percentFee : PayTypes.MIN_ACTIVATION_FEE;

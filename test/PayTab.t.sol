@@ -59,7 +59,7 @@ contract PayTabTest is Test {
     address internal stranger = makeAddr("stranger");
 
     uint96 constant MIN_TAB = PayTypes.MIN_TAB_AMOUNT; // $5.00
-    uint96 constant MIN_ACT_FEE = PayTypes.MIN_ACTIVATION_FEE; // $0.50
+    uint96 constant MIN_ACT_FEE = PayTypes.MIN_ACTIVATION_FEE; // $0.10
 
     bytes32 constant TAB_ID = bytes32("tab-001");
 
@@ -133,9 +133,9 @@ contract PayTabTest is Test {
     }
 
     function test_openTab_activationFee_atMinimum() public {
-        // $5.00 → 1% = $0.05, but min is $0.50. So fee = $0.50.
+        // $5.00 → 1% = $0.05, but min is $0.10. So fee = $0.10.
         uint96 amount = 5e6;
-        uint96 expectedFee = MIN_ACT_FEE; // $0.50
+        uint96 expectedFee = MIN_ACT_FEE; // $0.10
         uint96 expectedBalance = amount - expectedFee;
 
         vm.prank(agent);
@@ -147,7 +147,7 @@ contract PayTabTest is Test {
     }
 
     function test_openTab_activationFee_onePercent() public {
-        // $100.00 → 1% = $1.00 > $0.50 min. So fee = $1.00.
+        // $100.00 → 1% = $1.00 > $0.10 min. So fee = $1.00.
         uint96 amount = 100e6;
         uint96 expectedFee = amount / 100; // $1.00
         uint96 expectedBalance = amount - expectedFee;
@@ -161,8 +161,8 @@ contract PayTabTest is Test {
     }
 
     function test_openTab_activationFee_exactBreakeven() public {
-        // At $50.00, 1% = $0.50 = MIN_ACT_FEE. Either path gives same result.
-        uint96 amount = 50e6;
+        // At $10.00, 1% = $0.10 = MIN_ACT_FEE. Either path gives same result.
+        uint96 amount = 10e6;
         uint96 expectedFee = MIN_ACT_FEE;
 
         vm.prank(agent);
@@ -191,7 +191,7 @@ contract PayTabTest is Test {
 
     function test_openTab_emitsEvent() public {
         uint96 amount = 100e6;
-        uint96 expectedFee = amount / 100; // $1.00 > $0.50 min
+        uint96 expectedFee = amount / 100; // $1.00 > $0.10 min
         uint96 expectedBalance = amount - expectedFee;
         uint96 maxCharge = 500_000;
 
@@ -302,7 +302,7 @@ contract PayTabTest is Test {
 
     function test_openTabFor_correctTransfers() public {
         uint96 amount = 100e6;
-        uint96 expectedFee = amount / 100; // $1.00 > $0.50 min
+        uint96 expectedFee = amount / 100; // $1.00 > $0.10 min
         uint96 expectedBalance = amount - expectedFee;
 
         uint256 agentBefore = usdc.balanceOf(agent);
@@ -343,7 +343,7 @@ contract PayTabTest is Test {
     function test_getTab_returnsCorrectData() public {
         uint96 amount = 100e6;
         uint96 maxCharge = 200_000;
-        uint96 expectedFee = amount / 100; // $1.00 > $0.50 min
+        uint96 expectedFee = amount / 100; // $1.00 > $0.10 min
         uint96 expectedBalance = amount - expectedFee;
 
         vm.prank(agent);
