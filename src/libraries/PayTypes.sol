@@ -38,6 +38,9 @@ library PayTypes {
     uint96 constant MIN_DIRECT_AMOUNT = 1_000_000; // $1.00 in USDC (6 decimals)
     uint96 constant MIN_TAB_AMOUNT = 5_000_000; // $5.00 in USDC (6 decimals)
 
+    /// @notice Minimum withdrawal amount (scheduled rectification)
+    uint96 constant MIN_WITHDRAW_AMOUNT = 100_000; // $0.10 in USDC (6 decimals)
+
     /// @notice Activation fee floor
     uint96 constant MIN_ACTIVATION_FEE = 100_000; // $0.10 in USDC (6 decimals)
 
