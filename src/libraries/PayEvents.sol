@@ -48,4 +48,7 @@ library PayEvents {
     event CallerAuthorized(address indexed caller);
     event CallerRevoked(address indexed caller);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    /// @notice Emitted when accumulated fees are swept to the fee wallet.
+    event FeeSwept(uint96 amount);
 }

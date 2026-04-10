@@ -47,4 +47,22 @@ library PayTypes {
     /// @notice Per-charge minimum fee (server-enforced, not contract-enforced)
     /// @dev max($0.002, 1%) per charge. Below $0.20/call the floor kicks in.
     uint96 constant MIN_CHARGE_FEE = 2_000; // $0.002 in USDC (6 decimals)
+
+    /// @notice V5 tab struct — packed into 4 storage slots (down from 5 + mapping in V4).
+    /// @dev Slot 0: agent (20) + amount (12) = 32
+    ///      Slot 1: provider (20) + totalCharged (12) = 32
+    ///      Slot 2: maxChargePerCall (12) + activationFee (12) + status (1) + chargeCount (4) = 29
+    ///      Slot 3: totalWithdrawn (12) + chargeCountAtLastWithdraw (4) = 16
+    struct TabV5 {
+        address agent;
+        uint96 amount;
+        address provider;
+        uint96 totalCharged;
+        uint96 maxChargePerCall;
+        uint96 activationFee;
+        TabStatus status;
+        uint32 chargeCount;
+        uint96 totalWithdrawn;
+        uint32 chargeCountAtLastWithdraw;
+    }
 }
