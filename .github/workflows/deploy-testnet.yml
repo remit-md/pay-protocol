@@ -16,6 +16,7 @@ on:
           - DeployTabV2Testnet.s.sol
           - DeployTabV3Testnet.s.sol
           - DeployTabV4Testnet.s.sol
+          - DeployTabV5Testnet.s.sol
       dry_run:
         description: "Simulate only (no broadcast)"
         required: false
